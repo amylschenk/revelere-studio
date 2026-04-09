@@ -1,0 +1,13 @@
+{
+  "name": "revelere-studio",
+  "version": "1.0.0",
+  "description": "Revelere Studio — AI-powered STR interior design workflow app",
+  "scripts": {
+    "dev": "npx serve . -p 3000",
+    "start": "npx serve . -p 3000"
+  },
+  "keywords": ["revelere", "STR", "interior-design", "AI"],
+  "author": "Revelere",
+  "license": "UNLICENSED",
+  "private": true
+}
