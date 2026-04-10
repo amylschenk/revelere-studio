@@ -3921,6 +3921,12 @@ function renderDashboard(){
     </div></div>`;
 }
 
+function navToRoom(idx, page) {
+  S.activeRoom = idx;
+  S.activeSourcingRoom = idx;
+  nav(page);
+}
+
 function renderPropertySummary() {
   const titleEl = document.getElementById('summary-prop-title');
   const subEl   = document.getElementById('summary-prop-sub');
@@ -3975,11 +3981,11 @@ function renderPropertySummary() {
     return;
   }
 
-  gridEl.innerHTML = S.rooms.map(room => {
+  gridEl.innerHTML = S.rooms.map((room, idx) => {
     const heroSrc = (room.views && room.views[0] && room.views[0].after) || room.after || room.src || '';
     const heroImg = heroSrc
-      ? `<img src="${heroSrc}" alt="${room.name}">`
-      : `<div class="room-summary-no-image">◻</div>`;
+      ? `<img src="${heroSrc}" alt="${room.name}" style="cursor:pointer;" onclick="navToRoom(${idx},'design')">`
+      : `<div class="room-summary-no-image" style="cursor:pointer;" onclick="navToRoom(${idx},'design')">◻</div>`;
 
     const roomItems    = S.sourcing[room.id] || [];
     const roomAccepted = roomItems.filter(x => x.status === 'accepted');
@@ -3999,11 +4005,17 @@ function renderPropertySummary() {
       <div class="room-summary-hero">
         ${heroImg}
         <div class="room-summary-hero-badge">
-          <span class="room-summary-name">${room.name}</span>
+          <span class="room-summary-name" style="cursor:pointer;" onclick="navToRoom(${idx},'design')">${room.name}</span>
           <span class="room-summary-status">${statusLabel}</span>
         </div>
       </div>
-      <div class="room-summary-body">${budgetRows}</div>
+      <div class="room-summary-body">
+        ${budgetRows}
+        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px;" onclick="navToRoom(${idx},'design')">✦ Design</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px;" onclick="navToRoom(${idx},'sourcing')">⊙ Sourcing</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
