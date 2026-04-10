@@ -634,6 +634,8 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
     <div class="topbar-title" id="topbar-title">Dashboard</div>
     <div class="topbar-actions">
       <div id="save-status" style="font-size:11px;color:var(--muted-light);padding:0 4px;letter-spacing:0.03em;"></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportProject()" title="Save project file to transfer to another device">↓ Export</button>
+      <label class="btn btn-ghost btn-sm" title="Load a project file exported from another device" style="cursor:pointer;">↑ Import<input type="file" accept=".rev,.json" style="display:none;" onchange="importProject(this)"></label>
       <button class="btn btn-primary btn-sm" onclick="nav('upload')">+ New Property</button>
     </div>
   </div>
@@ -643,7 +645,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
   <div class="page active page-content" id="page-dashboard">
     <div class="section-header">
       <div class="section-eyebrow">Overview</div>
-      <div class="section-title">Good morning,<br><em>Revelere Studio</em></div>
+      <div class="section-title" id="dash-title">Revelere<br><em>Studio</em></div>
       <div class="section-sub" id="dash-sub">Upload your first property to get started.</div>
     </div>
     <div class="stats-grid">
@@ -3891,6 +3893,12 @@ function renderDashboard(){
   updateDashboard();
   const grid=document.getElementById('dash-grid');
   const sub=document.getElementById('dash-sub');
+  const titleEl=document.getElementById('dash-title');
+  if(titleEl){
+    titleEl.innerHTML=S.propName
+      ? `${S.propName}<br><em>Design Studio</em>`
+      : `Revelere<br><em>Design Studio</em>`;
+  }
   if(!S.propName&&!S.rooms.length){
     sub.textContent='Upload your first property to get started.';
     grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1;padding:38px 20px;">
@@ -4269,6 +4277,79 @@ let _saveTimer = null;
 function scheduleSave() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(saveProject, 1200);
+}
+
+function exportProject() {
+  const data = {
+    propName: S.propName,
+    preset: S.preset,
+    signatureMoment: S.signatureMoment,
+    coreEnabled: S.coreEnabled,
+    moodLevel: S.moodLevel,
+    sourcing: S.sourcing,
+    activeSourcingRoom: S.activeSourcingRoom,
+    pastedLinks: S.pastedLinks,
+    moodPhotos: S.moodPhotos,
+    activeRoom: S.activeRoom,
+    activeView: S.activeView,
+    rooms: S.rooms.map(r => ({
+      id: r.id, name: r.name, type: r.type, aiLabeled: r.aiLabeled,
+      src:   r.src   || null,
+      empty: r.empty || (r.emptyCanvas ? r.emptyCanvas.toDataURL() : null),
+      after: r.after || null,
+      brief: r.brief || null,
+      emptyCanvas: null,
+      views: (r.views || []).map(v => ({
+        src:   v.src   || null,
+        empty: v.empty || (v.emptyCanvas ? v.emptyCanvas.toDataURL() : null),
+        after: v.after || null,
+        emptyCanvas: null,
+      }))
+    })),
+    _exportedAt: Date.now()
+  };
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${S.propName || 'revelere-project'}.rev`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ Project exported — open the .rev file on any device to import');
+}
+
+function importProject(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const saved = JSON.parse(e.target.result);
+      S.propName          = saved.propName          || '';
+      S.preset            = saved.preset            || 'Revelere Core';
+      S.signatureMoment   = saved.signatureMoment   || false;
+      S.coreEnabled       = saved.coreEnabled       !== false;
+      S.moodLevel         = saved.moodLevel         ?? 50;
+      S.sourcing          = saved.sourcing          || {};
+      S.activeSourcingRoom= saved.activeSourcingRoom|| null;
+      S.pastedLinks       = saved.pastedLinks       || [];
+      S.moodPhotos        = saved.moodPhotos        || {};
+      S.activeRoom        = saved.activeRoom        || 0;
+      S.activeView        = saved.activeView        || 0;
+      S.rooms             = (saved.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
+      const pni = document.getElementById('prop-name-input');
+      if (pni && S.propName) pni.value = S.propName;
+      const sbn = document.getElementById('sb-name');
+      if (sbn) sbn.textContent = S.propName || 'Unnamed property';
+      await saveProject();
+      renderDashboard();
+      showToast(`✓ Project imported — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''} loaded`);
+    } catch(err) {
+      showToast('Import failed — file may be corrupted', true);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 async function saveProject() {
