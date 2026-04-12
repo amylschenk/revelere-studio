@@ -3187,8 +3187,8 @@ async function lookupProductURL() {
     };
     setVal('ci-name',   data.name   || '');
     setVal('ci-vendor', data.vendor || '');
-    setVal('ci-price',  data.price  != null ? data.price : '');
-    setVal('ci-comm',   data.comm   != null ? data.comm  : '');
+    setVal('ci-price',  data.price  ? data.price  : '');   // leave blank if 0 so user can type
+    setVal('ci-comm',   data.comm   ? data.comm   : '');
     setVal('ci-notes',  data.notes  || '');
     setVal('ci-image',  data.image  || '');
     const sel = document.getElementById('ci-category');
@@ -4633,8 +4633,8 @@ fetch('/api/notify', { method: 'POST' }).catch(() => {});
       <div class="ci-fields-grid">
         <input class="form-input" id="ci-name"   type="text"   placeholder="Item name *"     style="font-size:12px;">
         <input class="form-input" id="ci-vendor" type="text"   placeholder="Vendor / brand"   style="font-size:12px;">
-        <input class="form-input" id="ci-price"  type="number" placeholder="Price ($)"        style="font-size:12px;" min="0">
-        <input class="form-input" id="ci-comm"   type="number" placeholder="Affiliate %"      style="font-size:12px;" min="0" max="100">
+        <input class="form-input" id="ci-price"  type="text" inputmode="decimal" placeholder="Price e.g. 149.99" style="font-size:12px;">
+        <input class="form-input" id="ci-comm"   type="text" inputmode="decimal" placeholder="Affiliate % e.g. 4"   style="font-size:12px;">
         <select class="form-select" id="ci-category" style="font-size:12px;">
           <option value="">Category…</option>
           <option>Seating</option><option>Tables</option><option>Lighting</option>
