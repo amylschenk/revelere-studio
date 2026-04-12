@@ -282,6 +282,12 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 .mood-thumb-del { position:absolute; top:-5px; right:-5px; width:16px; height:16px; background:var(--charcoal); color:var(--ivory); border:none; border-radius:50%; font-size:9px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; line-height:1; z-index:1; }
 .mood-add-btn { width:44px; height:44px; border:1.5px dashed var(--border-strong); border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--muted-light); cursor:pointer; transition:all 0.15s; background:transparent; }
 .mood-add-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(166,124,82,0.04); }
+.mood-ai-btn { width:44px; height:44px; border:1.5px solid rgba(166,124,82,0.35); border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--accent); cursor:pointer; transition:all 0.15s; background:rgba(166,124,82,0.05); flex-shrink:0; }
+.mood-ai-btn:hover { border-color:var(--accent); background:rgba(166,124,82,0.12); }
+.mood-ai-btn.generating { opacity:0.6; cursor:not-allowed; animation:mood-pulse 1.2s ease-in-out infinite; }
+@keyframes mood-pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+.mood-thumb-wrap { position:relative; width:44px; height:44px; }
+.mood-thumb-regen { position:absolute; bottom:-5px; right:-5px; width:16px; height:16px; background:var(--accent); color:white; border:none; border-radius:50%; font-size:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; line-height:1; z-index:1; }
 .mood-room-block { margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--border); }
 .mood-room-block:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
 .mood-room-name { font-size:11px; font-weight:500; color:var(--charcoal); margin-bottom:5px; }
@@ -2465,25 +2471,104 @@ function removeMoodPhoto(roomId, idx) {
   }
 }
 
+const _moodGenerating = {}; // track per-room loading state
+
+const MOOD_MATERIALS = {
+  'Mountain':      'rich walnut wood grain, hammered stone, dense boucle wool',
+  'Desert':        'warm terracotta tile, sand-coloured plaster, undyed linen',
+  'Coastal':       'bleached driftwood, sea glass, natural jute and rattan',
+  'City':          'polished dark marble, brushed bronze, smoked glass',
+  'Revelere Core': 'warm oak, aged leather, textured linen, soft plaster',
+};
+
+const MOOD_SHOT_PROMPTS = [
+  (roomType, style, mat) => `Extreme close-up macro photography of ${mat} — luxury interior surface detail, warm shallow depth of field, soft amber light raking across the texture, no people, no text, editorial interior design magazine`,
+  (roomType, style, mat) => `Styled luxury vignette for a ${style} ${roomType} — a single sculptural object on ${mat}, moody warm candlelight, cinematic shadow play, boutique hotel aesthetic, editorial photography, no text`,
+  (roomType, style, mat) => `Architectural detail in a high-end ${style} ${roomType} — dramatic directional light casting shadows on ${mat}, ultra-luxury interior, film-still quality, no people, no text`,
+  (roomType, style, mat) => `Flat-lay editorial arrangement of ${mat} — ${style} interior design palette, warm ivory and deep accent tones, aspirational mood board, natural diffused light, no text`,
+  (roomType, style, mat) => `Moody cinematic interior photography — ${mat} surface in a ${style} ${roomType}, warm amber bokeh background, luxury hotel meets high-fashion editorial, no people, no text`,
+  (roomType, style, mat) => `Close-up of layered textiles and natural materials — ${mat} — styled for a ${style} ${roomType}, tactile luxury, warm light, Revelere interior design aesthetic, editorial quality, no text`,
+];
+
+async function generateMoodPhoto(roomId, regenIdx = null) {
+  if (_moodGenerating[roomId]) return;
+  const room = S.rooms.find(r => String(r.id) === String(roomId));
+  if (!room) return;
+
+  _moodGenerating[roomId] = true;
+  renderMoodUploadUI(roomId);
+
+  const style    = (room.brief && room.brief.preset) || S.preset || 'Revelere Core';
+  const mat      = MOOD_MATERIALS[style] || MOOD_MATERIALS['Revelere Core'];
+  const roomType = room.type || 'interior space';
+
+  // Rotate through shot types — pick based on current count so consecutive calls vary
+  const existing = (S.moodPhotos[roomId] || []).length;
+  const shot = MOOD_SHOT_PROMPTS[(existing + Math.floor(Math.random() * MOOD_SHOT_PROMPTS.length)) % MOOD_SHOT_PROMPTS.length];
+  const prompt = shot(roomType, style, mat) + '. Revelere Design Studio. Cinematic. Intentional. Unforgettable.';
+
+  try {
+    const resp = await fetch('/api/openai-generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-image-1', prompt, n: 1, size: '1024x1024', quality: 'medium' }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error?.message || 'Generation failed');
+
+    const b64 = data.data?.[0]?.b64_json;
+    const url  = data.data?.[0]?.url;
+    const src  = b64 ? `data:image/png;base64,${b64}` : url;
+    if (!src) throw new Error('No image returned');
+
+    if (!S.moodPhotos[roomId]) S.moodPhotos[roomId] = [];
+    const entry = { src, label: `AI · ${style} ${roomType}`, aiGenerated: true };
+
+    if (regenIdx !== null && S.moodPhotos[roomId][regenIdx]) {
+      S.moodPhotos[roomId][regenIdx] = entry; // replace in-place
+    } else {
+      S.moodPhotos[roomId].push(entry);
+    }
+    scheduleSave();
+    showToast('✦ Mood image generated');
+  } catch(e) {
+    showToast('Generation failed — try again', true);
+    console.error(e);
+  } finally {
+    _moodGenerating[roomId] = false;
+    renderMoodUploadUI(roomId);
+  }
+}
+
 function renderMoodUploadUI(roomId) {
   const container = document.getElementById('mood-upload-' + roomId);
   if (!container) return;
-  const photos = (S.moodPhotos || {})[roomId] || [];
-  const preset = S.preset || 'Revelere Core';
+  const photos  = (S.moodPhotos || {})[roomId] || [];
+  const preset  = S.preset || 'Revelere Core';
   const library = MOOD_LIBRARY[preset] || MOOD_LIBRARY['Revelere Core'];
   const autoLabel = photos.length === 0 ? (library[0] ? library[0].label + ', ' + (library[1]?.label||'') + '…' : 'Library images') : '';
+  const isGen = !!_moodGenerating[roomId];
+
   const thumbs = photos.map((p, i) => `
     <div class="mood-thumb-wrap">
       <img src="${p.src}" alt="${p.label}" class="mood-thumb">
       <button class="mood-thumb-del" onclick="removeMoodPhoto('${roomId}',${i})" title="Remove">×</button>
+      ${p.aiGenerated ? `<button class="mood-thumb-regen" onclick="generateMoodPhoto('${roomId}',${i})" title="Regenerate this image">↺</button>` : ''}
     </div>`).join('');
+
   const addBtn = photos.length < 6
     ? `<label class="mood-add-btn" title="Upload mood or material photo"><input type="file" accept="image/*" multiple style="display:none" onchange="uploadMoodPhoto('${roomId}',this)">+</label>`
     : '';
+
+  const aiBtn = photos.length < 6
+    ? `<button class="mood-ai-btn${isGen ? ' generating' : ''}" onclick="generateMoodPhoto('${roomId}')" title="${isGen ? 'Generating…' : 'AI generate a mood or material image'}">${isGen ? '…' : '✦'}</button>`
+    : '';
+
   const hint = photos.length === 0
-    ? `<div class="mood-autofill-hint">Auto: ${autoLabel}</div>`
-    : photos.length < 6 ? `<div class="mood-autofill-hint">${photos.length} uploaded · adds up to ${6-photos.length} more</div>` : '';
-  container.innerHTML = `<div class="mood-upload-row">${thumbs}${addBtn}</div>${hint}`;
+    ? `<div class="mood-autofill-hint">Auto: ${autoLabel} &nbsp;·&nbsp; click ✦ to AI-generate</div>`
+    : photos.length < 6 ? `<div class="mood-autofill-hint">${photos.length} uploaded · click ✦ to generate more</div>` : '';
+
+  container.innerHTML = `<div class="mood-upload-row">${thumbs}${addBtn}${aiBtn}</div>${hint}`;
 }
 
 function renderAllMoodUploads() {
