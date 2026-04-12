@@ -79,29 +79,57 @@ export default async function handler(req, res) {
     }
   } catch(e) {}
 
-  // Step 2: Try fetching the product page for OG / JSON-LD data
-  let name = '', image = '', price = 0;
+  // Detect bot-blocked / error pages by title
+  const BOT_TITLES = /page not found|robot check|access denied|something went wrong|error|captcha|verify you are human|just a moment|are you a robot|service unavailable|403 forbidden|404/i;
+
+  // Extract Amazon ASIN from URL if present
+  let asin = '';
   try {
-    const pageResp = await fetch(url, {
+    const asinMatch = url.match(/\/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/i) || url.match(/[?&](?:ASIN|asin)=([A-Z0-9]{10})/i);
+    if (asinMatch) asin = asinMatch[1];
+  } catch(e) {}
+
+  async function fetchPage(ua) {
+    return fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': ua,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Encoding': 'gzip, deflate',
         'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
       },
       signal: AbortSignal.timeout(8000),
       redirect: 'follow',
     });
+  }
 
-    const html = await pageResp.text();
+  // Step 2: Try fetching the product page for OG / JSON-LD data
+  let name = '', image = '', price = 0;
+  try {
+    // Try desktop UA first, then mobile if it looks bot-blocked
+    let html = '';
+    let resp = await fetchPage('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    html = await resp.text();
+
+    // If page looks bot-blocked, try mobile UA
+    const titleTagMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const pageTitle = titleTagMatch ? titleTagMatch[1].trim() : '';
+    if (BOT_TITLES.test(pageTitle) || html.length < 2000) {
+      resp = await fetchPage('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+      html = await resp.text();
+    }
+
+    const freshTitle = (html.match(/<title[^>]*>([^<]+)<\/title>/i) || [])[1] || '';
+    if (BOT_TITLES.test(freshTitle)) {
+      // Still blocked — skip page data, fall through to ASIN/fallback
+      throw new Error('bot-blocked');
+    }
 
     // OG tags
-    const ogTitle   = ogGet(html, 'og:title')               || ogGet(html, 'twitter:title');
-    const ogImage   = ogGet(html, 'og:image')               || ogGet(html, 'twitter:image');
-    const ogPrice   = ogGet(html, 'product:price:amount')   || ogGet(html, 'og:price:amount');
-    const ogSite    = ogGet(html, 'og:site_name');
+    const ogTitle  = ogGet(html, 'og:title')             || ogGet(html, 'twitter:title');
+    const ogImage  = ogGet(html, 'og:image')             || ogGet(html, 'twitter:image');
+    const ogPrice  = ogGet(html, 'product:price:amount') || ogGet(html, 'og:price:amount');
+    const ogSite   = ogGet(html, 'og:site_name');
     if (ogSite && !VENDOR_MAP[new URL(url).hostname.replace(/^www\./, '')]) vendor = ogSite;
 
     // JSON-LD product schema
@@ -115,27 +143,36 @@ export default async function handler(req, res) {
           name  = product.name || '';
           image = Array.isArray(product.image) ? product.image[0] : (product.image || '');
           price = parseFloat(product.offers?.price || product.offers?.[0]?.price || '0') || 0;
-          if (product.brand?.name && !VENDOR_MAP[new URL(url).hostname.replace(/^www\./, '')]) {
-            vendor = product.brand.name;
-          }
+          if (product.brand?.name && !VENDOR_MAP[new URL(url).hostname.replace(/^www\./, '')]) vendor = product.brand.name;
           break;
         }
       } catch(e) {}
     }
 
-    // Fall back to OG if JSON-LD gave nothing
+    // Fall back to OG
     if (!name)  name  = ogTitle || '';
     if (!image) image = ogImage || '';
     if (!price) price = parseFloat(ogPrice || '0') || 0;
 
-    // Also try to find title tag if still nothing
-    if (!name) {
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      if (titleMatch) name = titleMatch[1].trim().split(/[|\-–]/)[0].trim();
+    // Title tag last resort for name
+    if (!name && !BOT_TITLES.test(freshTitle)) {
+      name = freshTitle.split(/[|\-–]/)[0].trim();
+    }
+
+    // Try to find price in page text if still missing (e.g. "$49.99" pattern)
+    if (!price) {
+      const priceMatch = html.match(/["']price["']\s*[:=]\s*["']?([\d,.]+)["']?/i)
+                      || html.match(/\$\s*([\d,]+\.?\d{0,2})\b/);
+      if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, '')) || 0;
     }
 
   } catch(e) {
-    // Fetch failed (bot block, timeout, etc.) — that's fine, we'll return what we have
+    // Fetch failed or bot-blocked — fall through to ASIN/fallback below
+  }
+
+  // Step 2b: For Amazon with ASIN, build image URL via associate widget (works without scraping)
+  if (asin && !image) {
+    image = `https://ws-na.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=${asin}&Format=_SL500_&ID=AsinImage&MarketPlace=US&ServiceVersion=20070822&WS=1&tag=revelere-20`;
   }
 
   // Step 3: Clean up name with Claude (only if we have a name to clean)
