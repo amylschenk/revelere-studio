@@ -948,38 +948,33 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
           <!-- Add custom item inline form -->
           <div id="custom-item-form" style="display:none;padding:16px 20px;border-top:1px solid var(--border);background:var(--ivory);">
             <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">Add custom item</div>
-            <!-- Step 1: URL lookup -->
-            <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
-              <input class="form-input" id="ci-link" type="url" placeholder="Paste product URL and we'll fill the rest…" style="font-size:12px;flex:1;" onkeydown="if(event.key==='Enter')lookupProductURL()">
+            <!-- URL lookup row -->
+            <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+              <input class="form-input" id="ci-link" type="url" placeholder="Paste product URL to auto-fill…" style="font-size:12px;flex:1;" onkeydown="if(event.key==='Enter')lookupProductURL()">
               <button class="btn btn-accent btn-sm" id="ci-lookup-btn" onclick="lookupProductURL()" style="white-space:nowrap;flex-shrink:0;">✦ Look up</button>
             </div>
-            <!-- Step 2: Editable fields (hidden until lookup or manual toggle) -->
-            <div id="ci-fields" style="display:none;">
-              <!-- Image preview -->
-              <div id="ci-image-preview" style="display:none;margin-bottom:10px;">
-                <img id="ci-preview-img" src="" alt="" style="height:80px;width:80px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-                <input class="form-input" id="ci-name" type="text" placeholder="Item name" style="font-size:12px;">
-                <input class="form-input" id="ci-vendor" type="text" placeholder="Vendor / brand" style="font-size:12px;">
-                <input class="form-input" id="ci-price" type="number" placeholder="Price ($)" style="font-size:12px;" min="0">
-                <input class="form-input" id="ci-comm" type="number" placeholder="Affiliate %" style="font-size:12px;" min="0" max="100">
-                <select class="form-select" id="ci-category" style="font-size:12px;">
-                  <option value="">Category…</option>
-                  <option>Seating</option><option>Tables</option><option>Lighting</option>
-                  <option>Textiles</option><option>Decor</option><option>Furniture</option>
-                  <option>Accessories</option><option>Signature</option><option>Other</option>
-                </select>
-                <input class="form-input" id="ci-notes" type="text" placeholder="Notes (optional)" style="font-size:12px;">
-                <input class="form-input" id="ci-image" type="url" placeholder="Image URL (optional)" style="font-size:12px;grid-column:1/-1;">
-              </div>
+            <!-- Image preview -->
+            <div id="ci-image-preview" style="display:none;margin-bottom:10px;">
+              <img id="ci-preview-img" src="" alt="" style="height:72px;width:72px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">
             </div>
-            <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
-              <button class="btn btn-ghost btn-sm" id="ci-manual-btn" onclick="showCustomItemFields()" style="font-size:11px;color:var(--muted);">Enter manually instead</button>
-              <div style="display:flex;gap:8px;">
-                <button class="btn btn-ghost btn-sm" onclick="closeAddCustomItem()">Cancel</button>
-                <button class="btn btn-primary btn-sm" id="ci-save-btn" onclick="saveCustomItem()" style="display:none;">Add item</button>
-              </div>
+            <!-- Always-visible fields -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <input class="form-input" id="ci-name"   type="text"   placeholder="Item name *"          style="font-size:12px;">
+              <input class="form-input" id="ci-vendor" type="text"   placeholder="Vendor / brand"        style="font-size:12px;">
+              <input class="form-input" id="ci-price"  type="number" placeholder="Price ($)"             style="font-size:12px;" min="0">
+              <input class="form-input" id="ci-comm"   type="number" placeholder="Affiliate %"           style="font-size:12px;" min="0" max="100">
+              <select class="form-select" id="ci-category" style="font-size:12px;">
+                <option value="">Category…</option>
+                <option>Seating</option><option>Tables</option><option>Lighting</option>
+                <option>Textiles</option><option>Decor</option><option>Furniture</option>
+                <option>Accessories</option><option>Signature</option><option>Other</option>
+              </select>
+              <input class="form-input" id="ci-notes"  type="text"   placeholder="Notes (optional)"      style="font-size:12px;">
+              <input class="form-input" id="ci-image"  type="url"    placeholder="Image URL (optional)"  style="font-size:12px;grid-column:1/-1;">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+              <button class="btn btn-ghost btn-sm" onclick="closeAddCustomItem()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="saveCustomItem()">Add item</button>
             </div>
           </div>
         </div>
@@ -3178,24 +3173,10 @@ function closeAddCustomItem(){
   if (form) form.style.display = 'none';
   ['ci-category','ci-name','ci-vendor','ci-link','ci-image','ci-price','ci-comm','ci-notes']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  const fields = document.getElementById('ci-fields');
-  if (fields) fields.style.display = 'none';
-  const saveBtn = document.getElementById('ci-save-btn');
-  if (saveBtn) saveBtn.style.display = 'none';
-  const manualBtn = document.getElementById('ci-manual-btn');
-  if (manualBtn) manualBtn.style.display = '';
   const preview = document.getElementById('ci-image-preview');
   if (preview) preview.style.display = 'none';
-}
-
-function showCustomItemFields() {
-  const fields = document.getElementById('ci-fields');
-  if (fields) fields.style.display = 'block';
-  const saveBtn = document.getElementById('ci-save-btn');
-  if (saveBtn) saveBtn.style.display = '';
-  const manualBtn = document.getElementById('ci-manual-btn');
-  if (manualBtn) manualBtn.style.display = 'none';
-  setTimeout(() => document.getElementById('ci-name')?.focus(), 50);
+  const sel = document.getElementById('ci-category');
+  if (sel) sel.value = '';
 }
 
 async function lookupProductURL() {
@@ -3214,31 +3195,31 @@ async function lookupProductURL() {
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Lookup failed');
 
-    // Fill fields
-    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-    set('ci-name',     data.name);
-    set('ci-vendor',   data.vendor);
-    set('ci-price',    data.price || '');
-    set('ci-comm',     data.comm  || '');
-    set('ci-notes',    data.notes || '');
-    set('ci-image',    data.image || '');
-    if (data.category) {
-      const sel = document.getElementById('ci-category');
-      if (sel) sel.value = data.category;
-    }
+    // Fill every field directly — no show/hide needed
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.value = (val !== null && val !== undefined) ? String(val) : '';
+    };
+    setVal('ci-name',   data.name   || '');
+    setVal('ci-vendor', data.vendor || '');
+    setVal('ci-price',  data.price  != null ? data.price : '');
+    setVal('ci-comm',   data.comm   != null ? data.comm  : '');
+    setVal('ci-notes',  data.notes  || '');
+    setVal('ci-image',  data.image  || '');
+    const sel = document.getElementById('ci-category');
+    if (sel && data.category) sel.value = data.category;
 
-    // Show image preview if we got one
+    // Image preview
     if (data.image) {
       const preview = document.getElementById('ci-image-preview');
-      const img = document.getElementById('ci-preview-img');
+      const img     = document.getElementById('ci-preview-img');
       if (preview && img) { img.src = data.image; preview.style.display = 'block'; }
     }
 
-    showCustomItemFields();
-    showToast('✓ Product info filled in — review and save');
+    showToast('✓ Info loaded — review and click Add item');
   } catch(e) {
-    showToast(e.message || 'Could not look up that URL', true);
-    showCustomItemFields(); // show fields so user can fill manually
+    showToast(e.message || 'Could not look up that URL — fill in manually', true);
   } finally {
     if (btn) { btn.textContent = '✦ Look up'; btn.disabled = false; }
   }
