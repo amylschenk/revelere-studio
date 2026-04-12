@@ -602,6 +602,23 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
   .page-content { padding: 16px 12px; }
   .topbar-actions .btn-sm { padding: 5px 10px; font-size: 11px; }
 }
+
+/* ── Custom Item Modal ── */
+.ci-modal-overlay { display:none; position:fixed; inset:0; background:rgba(27,27,27,0.55); backdrop-filter:blur(3px); z-index:1000; align-items:center; justify-content:center; padding:16px; }
+.ci-modal-overlay.open { display:flex; }
+.ci-modal { background:white; border-radius:var(--radius-lg); width:100%; max-width:520px; box-shadow:0 20px 60px rgba(0,0,0,0.25); overflow:hidden; }
+.ci-modal-header { padding:18px 20px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.ci-modal-title { font-family:var(--font-display); font-size:20px; font-weight:400; }
+.ci-modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--muted); line-height:1; padding:2px 6px; }
+.ci-modal-body { padding:18px 20px; }
+.ci-lookup-row { display:flex; gap:8px; margin-bottom:16px; }
+.ci-lookup-row input { flex:1; }
+.ci-fields-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:4px; }
+.ci-modal-footer { padding:14px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; background:var(--ivory); }
+.ci-preview-strip { display:none; align-items:center; gap:12px; padding:10px 12px; background:var(--ivory-dark); border-radius:var(--radius); margin-bottom:14px; }
+.ci-preview-strip img { width:56px; height:56px; object-fit:cover; border-radius:4px; border:1px solid var(--border); flex-shrink:0; }
+.ci-preview-name { font-size:13px; font-weight:500; color:var(--charcoal); }
+.ci-preview-vendor { font-size:11px; color:var(--muted); margin-top:2px; }
 </style>
 </head>
 <body>
@@ -945,38 +962,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
           <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
             <button class="btn btn-outline btn-sm" onclick="openAddCustomItem()">+ Add custom item</button>
           </div>
-          <!-- Add custom item inline form -->
-          <div id="custom-item-form" style="display:none;padding:16px 20px;border-top:1px solid var(--border);background:var(--ivory);">
-            <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">Add custom item</div>
-            <!-- URL lookup row -->
-            <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
-              <input class="form-input" id="ci-link" type="url" placeholder="Paste product URL to auto-fill…" style="font-size:12px;flex:1;" onkeydown="if(event.key==='Enter')lookupProductURL()">
-              <button class="btn btn-accent btn-sm" id="ci-lookup-btn" onclick="lookupProductURL()" style="white-space:nowrap;flex-shrink:0;">✦ Look up</button>
-            </div>
-            <!-- Image preview -->
-            <div id="ci-image-preview" style="display:none;margin-bottom:10px;">
-              <img id="ci-preview-img" src="" alt="" style="height:72px;width:72px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">
-            </div>
-            <!-- Always-visible fields -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-              <input class="form-input" id="ci-name"   type="text"   placeholder="Item name *"          style="font-size:12px;">
-              <input class="form-input" id="ci-vendor" type="text"   placeholder="Vendor / brand"        style="font-size:12px;">
-              <input class="form-input" id="ci-price"  type="number" placeholder="Price ($)"             style="font-size:12px;" min="0">
-              <input class="form-input" id="ci-comm"   type="number" placeholder="Affiliate %"           style="font-size:12px;" min="0" max="100">
-              <select class="form-select" id="ci-category" style="font-size:12px;">
-                <option value="">Category…</option>
-                <option>Seating</option><option>Tables</option><option>Lighting</option>
-                <option>Textiles</option><option>Decor</option><option>Furniture</option>
-                <option>Accessories</option><option>Signature</option><option>Other</option>
-              </select>
-              <input class="form-input" id="ci-notes"  type="text"   placeholder="Notes (optional)"      style="font-size:12px;">
-              <input class="form-input" id="ci-image"  type="url"    placeholder="Image URL (optional)"  style="font-size:12px;grid-column:1/-1;">
-            </div>
-            <div style="display:flex;gap:8px;justify-content:flex-end;">
-              <button class="btn btn-ghost btn-sm" onclick="closeAddCustomItem()">Cancel</button>
-              <button class="btn btn-primary btn-sm" onclick="saveCustomItem()">Add item</button>
-            </div>
-          </div>
+          <!-- inline form removed — now a modal -->
         </div>
         <div id="sourcing-tip" style="display:none;margin-top:9px;padding:10px 13px;background:rgba(122,158,126,0.08);border:1px solid rgba(122,158,126,0.2);border-radius:var(--radius);font-size:12px;color:#4A7A50;"></div>
       </div>
@@ -3160,23 +3146,21 @@ function swapRoomItem(roomId, itemId) {
 
 // ── Add custom item ───────────────────────────
 function openAddCustomItem(){
-  const form = document.getElementById('custom-item-form');
-  if (!form) return;
-  const isOpen = form.style.display !== 'none';
-  if (isOpen) { closeAddCustomItem(); return; }
-  form.style.display = 'block';
-  setTimeout(() => document.getElementById('ci-link')?.focus(), 50);
+  const overlay = document.getElementById('ci-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('ci-link')?.focus(), 80);
 }
 
 function closeAddCustomItem(){
-  const form = document.getElementById('custom-item-form');
-  if (form) form.style.display = 'none';
-  ['ci-category','ci-name','ci-vendor','ci-link','ci-image','ci-price','ci-comm','ci-notes']
+  const overlay = document.getElementById('ci-modal-overlay');
+  if (overlay) overlay.classList.remove('open');
+  ['ci-name','ci-vendor','ci-link','ci-image','ci-price','ci-comm','ci-notes']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  const preview = document.getElementById('ci-image-preview');
-  if (preview) preview.style.display = 'none';
   const sel = document.getElementById('ci-category');
   if (sel) sel.value = '';
+  const strip = document.getElementById('ci-preview-strip');
+  if (strip) strip.style.display = 'none';
 }
 
 async function lookupProductURL() {
@@ -3210,14 +3194,19 @@ async function lookupProductURL() {
     const sel = document.getElementById('ci-category');
     if (sel && data.category) sel.value = data.category;
 
-    // Image preview
-    if (data.image) {
-      const preview = document.getElementById('ci-image-preview');
-      const img     = document.getElementById('ci-preview-img');
-      if (preview && img) { img.src = data.image; preview.style.display = 'block'; }
+    // Preview strip
+    const strip = document.getElementById('ci-preview-strip');
+    if (strip) {
+      strip.style.display = 'flex';
+      const img = document.getElementById('ci-preview-img');
+      if (img) { img.src = data.image || ''; img.style.display = data.image ? '' : 'none'; }
+      const nameEl = document.getElementById('ci-preview-name');
+      if (nameEl) nameEl.textContent = data.name || '(name not found — type it below)';
+      const vendEl = document.getElementById('ci-preview-vendor');
+      if (vendEl) vendEl.textContent = data.vendor || '';
     }
 
-    showToast('✓ Info loaded — review and click Add item');
+    showToast('✓ Fields filled — review and click Add item');
   } catch(e) {
     showToast(e.message || 'Could not look up that URL — fill in manually', true);
   } finally {
@@ -4610,5 +4599,49 @@ try {
 // Notify on page visit (rate-limited server-side to once/hour)
 fetch('/api/notify', { method: 'POST' }).catch(() => {});
 </script>
+
+<!-- Custom Item Modal -->
+<div class="ci-modal-overlay" id="ci-modal-overlay" onclick="if(event.target===this)closeAddCustomItem()">
+  <div class="ci-modal">
+    <div class="ci-modal-header">
+      <div class="ci-modal-title">Add item</div>
+      <button class="ci-modal-close" onclick="closeAddCustomItem()">×</button>
+    </div>
+    <div class="ci-modal-body">
+      <!-- URL lookup -->
+      <div class="ci-lookup-row">
+        <input class="form-input" id="ci-link" type="url" placeholder="Paste a product URL to auto-fill fields…" onkeydown="if(event.key==='Enter')lookupProductURL()">
+        <button class="btn btn-accent btn-sm" id="ci-lookup-btn" onclick="lookupProductURL()" style="white-space:nowrap;flex-shrink:0;">✦ Look up</button>
+      </div>
+      <!-- Image + name preview strip (shown after lookup) -->
+      <div class="ci-preview-strip" id="ci-preview-strip">
+        <img id="ci-preview-img" src="" alt="">
+        <div>
+          <div class="ci-preview-name" id="ci-preview-name"></div>
+          <div class="ci-preview-vendor" id="ci-preview-vendor"></div>
+        </div>
+      </div>
+      <!-- Fields — always visible, edit anything -->
+      <div class="ci-fields-grid">
+        <input class="form-input" id="ci-name"   type="text"   placeholder="Item name *"     style="font-size:12px;">
+        <input class="form-input" id="ci-vendor" type="text"   placeholder="Vendor / brand"   style="font-size:12px;">
+        <input class="form-input" id="ci-price"  type="number" placeholder="Price ($)"        style="font-size:12px;" min="0">
+        <input class="form-input" id="ci-comm"   type="number" placeholder="Affiliate %"      style="font-size:12px;" min="0" max="100">
+        <select class="form-select" id="ci-category" style="font-size:12px;">
+          <option value="">Category…</option>
+          <option>Seating</option><option>Tables</option><option>Lighting</option>
+          <option>Textiles</option><option>Decor</option><option>Furniture</option>
+          <option>Accessories</option><option>Signature</option><option>Other</option>
+        </select>
+        <input class="form-input" id="ci-notes"  type="text"   placeholder="Notes (optional)" style="font-size:12px;">
+        <input class="form-input" id="ci-image"  type="url"    placeholder="Image URL (optional)" style="font-size:12px;grid-column:1/-1;">
+      </div>
+    </div>
+    <div class="ci-modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeAddCustomItem()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveCustomItem()">Add item</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
