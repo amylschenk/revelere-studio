@@ -3206,7 +3206,15 @@ async function lookupProductURL() {
       if (vendEl) vendEl.textContent = data.vendor || '';
     }
 
-    showToast('✓ Fields filled — review and click Add item');
+    const gotName = !!(data.name);
+    const gotVendor = !!(data.vendor);
+    if (!gotName && !gotVendor) {
+      showToast('Site blocked auto-fill — vendor set from URL, fill in the rest', false);
+    } else if (!gotName) {
+      showToast(`✓ Found vendor: ${data.vendor} — add the item name below`);
+    } else {
+      showToast('✓ Fields filled — review and click Add item');
+    }
   } catch(e) {
     showToast(e.message || 'Could not look up that URL — fill in manually', true);
   } finally {
