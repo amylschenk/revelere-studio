@@ -2937,12 +2937,15 @@ function renderSourcing(){
     return;
   }
 
-  // Group by category
-  const categories = [...new Set(items.map(x => x.category))];
+  // Sort: accepted → pending → rejected, then by category within each group
+  const STATUS_RANK = { accepted: 0, pending: 1, rejected: 2 };
+  const sorted = [...items].sort((a, b) => {
+    const sr = (STATUS_RANK[a.status] ?? 1) - (STATUS_RANK[b.status] ?? 1);
+    if (sr !== 0) return sr;
+    return (a.category || '').localeCompare(b.category || '');
+  });
 
-  tbody.innerHTML = categories.map(cat => {
-    const catItems = items.filter(x => x.category === cat);
-    return catItems.map((item) => {
+  tbody.innerHTML = sorted.map((item) => {
       const i = items.indexOf(item);
       const isAccepted = item.status === 'accepted';
       const isRejected = item.status === 'rejected';
@@ -3023,7 +3026,6 @@ function renderSourcing(){
           </div>
         </td>
       </tr>`;
-    }).join('');
   }).join('');
 
   // Update tip bar
@@ -3146,6 +3148,22 @@ function swapRoomItem(roomId, itemId) {
 }
 
 // ── Add custom item ───────────────────────────
+function updateCiImagePreview(src) {
+  const strip = document.getElementById('ci-preview-strip');
+  const img   = document.getElementById('ci-preview-img');
+  if (!strip || !img) return;
+  if (src && src.startsWith('http')) {
+    img.src = src;
+    img.style.display = '';
+    strip.style.display = 'flex';
+  } else if (!src) {
+    img.style.display = 'none';
+    // Only hide strip if name/vendor also empty
+    const nameEl = document.getElementById('ci-preview-name');
+    if (!nameEl?.textContent) strip.style.display = 'none';
+  }
+}
+
 function openAddCustomItem(){
   const overlay = document.getElementById('ci-modal-overlay');
   if (!overlay) return;
@@ -3191,7 +3209,9 @@ async function lookupProductURL() {
     setVal('ci-price',  data.price  ? data.price  : '');   // leave blank if 0 so user can type
     setVal('ci-comm',   data.comm   ? data.comm   : '');
     setVal('ci-notes',  data.notes  || '');
-    setVal('ci-image',  data.image  || '');
+    const existingImg = document.getElementById('ci-image')?.value.trim();
+    if (!existingImg) setVal('ci-image', data.image || ''); // don't overwrite user's own URL
+    if (data.image && !existingImg) updateCiImagePreview(data.image);
     const sel = document.getElementById('ci-category');
     if (sel && data.category) sel.value = data.category;
 
@@ -4643,7 +4663,7 @@ fetch('/api/notify', { method: 'POST' }).catch(() => {});
           <option>Accessories</option><option>Signature</option><option>Other</option>
         </select>
         <input class="form-input" id="ci-notes"  type="text"   placeholder="Notes (optional)" style="font-size:12px;">
-        <input class="form-input" id="ci-image"  type="url"    placeholder="Image URL (optional)" style="font-size:12px;grid-column:1/-1;">
+        <input class="form-input" id="ci-image"  type="text"   placeholder="Image URL (optional)" style="font-size:12px;grid-column:1/-1;" oninput="updateCiImagePreview(this.value)">
       </div>
     </div>
     <div class="ci-modal-footer">
