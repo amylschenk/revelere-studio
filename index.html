@@ -3005,7 +3005,7 @@ function renderSourcing(){
               <button class="act-btn ${isAccepted?'accd':'acc'}" onclick="toggleRoomItem('${room.id}','${item.id}',this)" title="${isAccepted?'Accepted — click to undo':'Accept'}">✓</button>
               <button class="act-btn rej ${isRejected?'accd':''}" onclick="rejectRoomItem('${room.id}','${item.id}',this)" title="${isRejected?'Rejected — click to undo':'Reject'}">✕</button>
               <button class="act-btn" onclick="swapRoomItem('${room.id}','${item.id}')" title="Swap for alternative">⇄</button>
-              <button class="act-btn" onclick="openReplacement('${room.id}','${item.id}')" title="Add direction / custom replacement" style="font-size:9px;">✎</button>
+              <button class="act-btn" onclick="editRoomItem('${room.id}','${item.id}')" title="Edit this item" style="font-size:9px;">✎</button>
             </div>
           </div>
         </td>
@@ -3148,6 +3148,39 @@ function swapRoomItem(roomId, itemId) {
 }
 
 // ── Add custom item ───────────────────────────
+let _editingItem = null; // { roomId, itemId } when editing, null when adding
+
+function editRoomItem(roomId, itemId) {
+  const items = S.sourcing[roomId] || [];
+  const item = items.find(x => String(x.id) === String(itemId));
+  if (!item) return;
+  _editingItem = { roomId, itemId };
+
+  // Pre-fill modal fields with item's current data
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  set('ci-link',     item.link     || '');
+  set('ci-name',     item.name     || '');
+  set('ci-vendor',   item.vendor   || '');
+  set('ci-price',    item.price    || '');
+  set('ci-comm',     item.comm     || '');
+  set('ci-notes',    item.notes    || '');
+  set('ci-image',    item.image    || '');
+  const sel = document.getElementById('ci-category');
+  if (sel) sel.value = item.category || '';
+
+  // Show image preview if there's an image
+  if (item.image) updateCiImagePreview(item.image);
+
+  // Update modal title and save button to reflect edit mode
+  const titleEl = document.querySelector('.ci-modal-title');
+  if (titleEl) titleEl.textContent = 'Edit item';
+  const saveBtn = document.querySelector('.ci-modal-footer .btn-primary');
+  if (saveBtn) saveBtn.textContent = 'Save changes';
+
+  const overlay = document.getElementById('ci-modal-overlay');
+  if (overlay) overlay.classList.add('open');
+}
+
 function updateCiImagePreview(src) {
   const strip = document.getElementById('ci-preview-strip');
   const img   = document.getElementById('ci-preview-img');
@@ -3172,6 +3205,7 @@ function openAddCustomItem(){
 }
 
 function closeAddCustomItem(){
+  _editingItem = null;
   const overlay = document.getElementById('ci-modal-overlay');
   if (overlay) overlay.classList.remove('open');
   ['ci-name','ci-vendor','ci-link','ci-image','ci-price','ci-comm','ci-notes']
@@ -3180,6 +3214,10 @@ function closeAddCustomItem(){
   if (sel) sel.value = '';
   const strip = document.getElementById('ci-preview-strip');
   if (strip) strip.style.display = 'none';
+  const titleEl = document.querySelector('.ci-modal-title');
+  if (titleEl) titleEl.textContent = 'Add item';
+  const saveBtn = document.querySelector('.ci-modal-footer .btn-primary');
+  if (saveBtn) saveBtn.textContent = 'Add item';
 }
 
 async function lookupProductURL() {
@@ -3244,10 +3282,38 @@ async function lookupProductURL() {
 }
 
 function saveCustomItem(){
-  const room = getCurrentRoom();
-  if (!room) { showToast('No active room — select a room first', true); return; }
   const name = document.getElementById('ci-name')?.value.trim();
   if (!name) { showToast('Item name is required', true); return; }
+
+  // EDIT MODE — update existing item in-place
+  if (_editingItem) {
+    const { roomId, itemId } = _editingItem;
+    const items = S.sourcing[roomId] || [];
+    const idx = items.findIndex(x => String(x.id) === String(itemId));
+    if (idx !== -1) {
+      items[idx] = {
+        ...items[idx],
+        name,
+        category: document.getElementById('ci-category')?.value || items[idx].category || 'Other',
+        vendor:   document.getElementById('ci-vendor')?.value.trim()  || items[idx].vendor  || '',
+        price:    parseFloat(document.getElementById('ci-price')?.value)  || items[idx].price  || 0,
+        comm:     parseFloat(document.getElementById('ci-comm')?.value)   || items[idx].comm   || 0,
+        image:    document.getElementById('ci-image')?.value.trim()  || items[idx].image  || '',
+        link:     document.getElementById('ci-link')?.value.trim()   || items[idx].link   || '',
+        notes:    document.getElementById('ci-notes')?.value.trim()  || '',
+      };
+    }
+    closeAddCustomItem();
+    renderSourcing();
+    updateBudget();
+    scheduleSave();
+    showToast(`✓ "${name}" updated`);
+    return;
+  }
+
+  // ADD MODE — create new item
+  const room = getCurrentRoom();
+  if (!room) { showToast('No active room — select a room first', true); return; }
   const item = {
     id:             makeItemId(),
     category:       document.getElementById('ci-category')?.value || 'Other',
