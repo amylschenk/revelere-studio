@@ -658,6 +658,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
     <div class="topbar-title" id="topbar-title">Dashboard</div>
     <div class="topbar-actions">
       <div id="save-status" style="font-size:11px;color:var(--muted-light);padding:0 4px;letter-spacing:0.03em;"></div>
+      <button id="sync-btn" class="btn btn-ghost btn-sm" onclick="syncToCloud()" title="Upload all images to cloud so they appear on every device">☁ Sync</button>
       <button class="btn btn-ghost btn-sm" onclick="exportProject()" title="Save project file to transfer to another device">↓ Export</button>
       <label class="btn btn-ghost btn-sm" title="Load a project file exported from another device" style="cursor:pointer;">↑ Import<input type="file" accept=".rev,.json" style="display:none;" onchange="importProject(this)"></label>
       <button class="btn btn-primary btn-sm" onclick="nav('upload')">+ New Property</button>
@@ -1350,6 +1351,128 @@ async function uploadToBlob(dataUrl, filename) {
   } catch (e) {
     console.warn('Blob upload skipped (offline or error):', e.message);
     return dataUrl;
+  }
+}
+
+// ── Cloud sync ────────────────────────────────────────────────────
+// Fetch the cloud manifest and fill in any null images / missing sourcing.
+// Runs silently on every page load so all devices stay up to date.
+async function syncFromManifest() {
+  try {
+    const r = await fetch('/api/manifest');
+    if (!r.ok) return;
+    const manifest = await r.json();
+    if (!manifest || !manifest.rooms) return;
+
+    let changed = false;
+    S.rooms.forEach(room => {
+      const mRoom = manifest.rooms[room.id] || manifest.rooms[String(room.id)];
+      if (mRoom) {
+        if (!room.src   && mRoom.src)   { room.src   = mRoom.src;   changed = true; }
+        if (!room.empty && mRoom.empty) { room.empty = mRoom.empty; changed = true; }
+        if (!room.after && mRoom.after) { room.after = mRoom.after; changed = true; }
+        // sync views
+        if (room.views && mRoom.views) {
+          room.views.forEach((view, i) => {
+            const mView = mRoom.views && mRoom.views[i];
+            if (mView) {
+              if (!view.src   && mView.src)   { view.src   = mView.src;   changed = true; }
+              if (!view.empty && mView.empty) { view.empty = mView.empty; changed = true; }
+              if (!view.after && mView.after) { view.after = mView.after; changed = true; }
+            }
+          });
+        }
+      }
+      // fill missing sourcing
+      const mSrc = manifest.sourcing && (manifest.sourcing[room.id] || manifest.sourcing[String(room.id)]);
+      if (mSrc && mSrc.length > 0 && (!S.sourcing[room.id] || S.sourcing[room.id].length === 0)) {
+        S.sourcing[room.id] = mSrc;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      renderRooms();
+      renderEmpty();
+      renderDesign();
+      renderSourcing();
+      updateDashboard();
+      scheduleSave();
+    }
+  } catch(e) {
+    console.warn('Manifest sync skipped:', e.message);
+  }
+}
+
+// Upload all local images to Vercel Blob and save a manifest so every device sees them.
+let _syncing = false;
+async function syncToCloud() {
+  if (_syncing) return;
+  _syncing = true;
+  const btn = document.getElementById('sync-btn');
+  if (btn) btn.textContent = '☁ Syncing…';
+
+  try {
+    const manifest = { rooms: {}, sourcing: {} };
+    const total = S.rooms.length;
+    let done = 0;
+
+    for (const room of S.rooms) {
+      const rData = { src: null, empty: null, after: null, views: [] };
+
+      // Upload each image field if it's still a base64 data URL
+      if (room.src) {
+        room.src   = await uploadToBlob(room.src,   `${room.id}-original.jpg`);
+        rData.src  = room.src;
+      }
+      if (room.empty) {
+        room.empty  = await uploadToBlob(room.empty, `${room.id}-empty.png`);
+        rData.empty = room.empty;
+      }
+      if (room.after) {
+        room.after  = await uploadToBlob(room.after, `${room.id}-after.png`);
+        rData.after = room.after;
+      }
+
+      // Views
+      if (room.views) {
+        for (let i = 0; i < room.views.length; i++) {
+          const view = room.views[i];
+          const vData = { src: null, empty: null, after: null };
+          if (view.src)   { view.src   = await uploadToBlob(view.src,   `${room.id}-v${i}-original.jpg`); vData.src   = view.src; }
+          if (view.empty) { view.empty = await uploadToBlob(view.empty, `${room.id}-v${i}-empty.png`);    vData.empty = view.empty; }
+          if (view.after) { view.after = await uploadToBlob(view.after, `${room.id}-v${i}-after.png`);    vData.after = view.after; }
+          rData.views.push(vData);
+        }
+      }
+
+      manifest.rooms[room.id] = rData;
+      done++;
+      if (btn) btn.textContent = `☁ ${done}/${total}…`;
+    }
+
+    // Include sourcing data so other devices get sourced items too
+    Object.keys(S.sourcing).forEach(k => { manifest.sourcing[k] = S.sourcing[k]; });
+
+    // Save manifest to Vercel Blob
+    const r = await fetch('/api/manifest', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(manifest),
+    });
+
+    scheduleSave();
+    if (r.ok) {
+      showToast('✓ Synced — images now visible on all devices');
+    } else {
+      showToast('Sync failed — check Vercel Blob token is set', true);
+    }
+  } catch(e) {
+    console.error('syncToCloud error:', e);
+    showToast('Sync error: ' + e.message, true);
+  } finally {
+    _syncing = false;
+    if (btn) btn.textContent = '☁ Sync';
   }
 }
 
@@ -4836,6 +4959,9 @@ try {
         : `✓ San Diego project loaded — ${S.rooms.length} rooms`
       );
     }
+    // Always fetch the cloud manifest and fill in any missing images/sourcing.
+    // This makes the app work on mobile, tablet, or any new device automatically.
+    syncFromManifest();
   });
 } catch(e) {
   console.error('Revelere Studio init error:', e);
