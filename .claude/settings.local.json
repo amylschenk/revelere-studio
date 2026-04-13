@@ -1,7 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(find ~/Desktop ~/Downloads ~/Pictures -name ss_*)",
+      "Bash(find / -maxdepth 8 -name \"ss_5213k3aw6*\")",
+      "Bash(find / -maxdepth 8 -name \"ss_9868fwrca*\")",
+      "Bash(python3 -c \"import PIL; print\\(''Pillow OK''\\)\")",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -c \"import playwright; print\\(''Playwright OK''\\)\")",
+      "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFont; print\\(''PIL full OK''\\)\")",
+      "Bash(screencapture -x -R \"0,25,1440,875\" /tmp/rev_chrome_full.png)",
+      "Read(//tmp/**)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git remote:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(export PATH=\"$HOME/.nvm/versions/node/v25.9.0/bin:$PATH\")",
+      "Bash(vercel --version)",
+      "Bash(npm install:*)"
     ]
   }
 }

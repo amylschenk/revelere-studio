@@ -974,6 +974,10 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
           <div class="budget-row"><div class="budget-row-label">Affiliate projected</div><div class="budget-row-value" style="color:#4A7A50;" id="affiliate-label">$0</div></div>
           <div class="budget-row"><div class="budget-row-label" style="font-weight:500;color:var(--charcoal);">Net cost</div><div class="budget-row-value" id="net-label" style="font-size:15px;">$0</div></div>
         </div>
+        <div id="per-room-budget" style="border-top:1px solid var(--border);padding:10px 20px 4px;display:none;">
+          <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">By room</div>
+          <div id="per-room-budget-rows"></div>
+        </div>
         <div style="padding:13px 20px;border-top:1px solid var(--border);">
           <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="nav('book')">Build design book →</button>
         </div>
@@ -1036,10 +1040,16 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
           <div class="book-opt-group">
             <span class="book-opt-label">Include sections</span>
             <div style="display:flex;flex-direction:column;gap:7px;">
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" checked> Cover + index</label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" checked> Per-room photos</label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" checked> Shopping list</label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox"> Affiliate report</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-cover" checked> Cover + index</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-rooms" checked> Per-room photos</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-sourcing" checked> Shopping list</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-nextsteps"> Next steps checklist</label>
+            </div>
+          </div>
+          <div class="book-opt-group">
+            <span class="book-opt-label">Rooms to include</span>
+            <div id="book-room-toggles" style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+              <div style="font-size:11px;color:var(--muted-light);font-style:italic;">Upload rooms in M1 first.</div>
             </div>
           </div>
           <div class="export-btns">
@@ -1175,10 +1185,12 @@ async function handleFiles(files){
     await new Promise(resolve=>{
       const r=new FileReader();
       r.onload=async e=>{
-        const src=e.target.result;
-        const type=await detectRoomType(src,file.name);
+        const rawSrc=e.target.result;
+        const type=await detectRoomType(rawSrc,file.name);
         const cnt=S.rooms.filter(r=>r.type===type).length;
-        S.rooms.push({id:Date.now()+Math.random(),name:cnt?type+' '+(cnt+1):type,type,src,empty:null,emptyCanvas:null,after:null,brief:null,aiLabeled:true});
+        const id=Date.now()+Math.random();
+        const src=await uploadToBlob(rawSrc,`${id}-original.jpg`);
+        S.rooms.push({id,name:cnt?type+' '+(cnt+1):type,type,src,empty:null,emptyCanvas:null,after:null,brief:null,aiLabeled:true});
         renderRooms();updateDashboard();resolve();
       };
       r.readAsDataURL(file);
@@ -1213,7 +1225,15 @@ function renderRooms(){
 }
 
 function setRoom(id,k,v){const r=S.rooms.find(r=>r.id==id);if(r){r[k]=v;scheduleSave();}}
-function removeRoom(id){S.rooms=S.rooms.filter(r=>r.id!=id);renderRooms();updateDashboard();scheduleSave();}
+function removeRoom(id){
+  S.rooms=S.rooms.filter(r=>r.id!=id);
+  if(S.activeRoom>=S.rooms.length) S.activeRoom=Math.max(0,S.rooms.length-1);
+  delete S.sourcing[id];
+  renderRooms();
+  updateDashboard();
+  scheduleSave();
+  showToast('Room removed');
+}
 
 const uz=document.getElementById('upload-zone');
 if(uz){
@@ -1312,6 +1332,25 @@ async function dataUrlToBlob(dataUrl, type='image/jpeg'){
   const arr=new Uint8Array(byteStr.length);
   for(let i=0;i<byteStr.length;i++) arr[i]=byteStr.charCodeAt(i);
   return new Blob([arr],{type});
+}
+
+// Upload a data URL to Vercel Blob CDN so all devices can see it.
+// Falls back to the original data URL silently if the upload fails.
+async function uploadToBlob(dataUrl, filename) {
+  if (!dataUrl || dataUrl.startsWith('http')) return dataUrl; // already a URL
+  try {
+    const r = await fetch('/api/blob-upload', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl, filename }),
+    });
+    if (!r.ok) return dataUrl;
+    const { url } = await r.json();
+    return url || dataUrl;
+  } catch (e) {
+    console.warn('Blob upload skipped (offline or error):', e.message);
+    return dataUrl;
+  }
 }
 
 async function callOpenAIInpaint(imageDataUrl){
@@ -1444,9 +1483,12 @@ function renderEmpty(){
     return `<div class="ba-card" id="ba-${room.id}">
       <div class="ba-header">
         <div class="ba-name">${room.name}</div>
-        <span class="chip ${hasDone?'chip-complete':room.processing?'chip-active':'chip-pending'}">
-          <span class="chip-dot"></span>${hasDone?'Generated':room.processing?'Processing':'Pending'}
-        </span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="chip ${hasDone?'chip-complete':room.processing?'chip-active':'chip-pending'}">
+            <span class="chip-dot"></span>${hasDone?'Generated':room.processing?'Processing':'Pending'}
+          </span>
+          <button onclick="removeRoom('${room.id}')" title="Delete room" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:2px 4px;line-height:1;border-radius:3px;" onmouseover="this.style.color='#c0504a'" onmouseout="this.style.color='var(--muted)'">✕</button>
+        </div>
       </div>
       <div class="panel-pair">
         <div class="panel"><img src="${room.src}" alt="Before" loading="lazy"><div class="panel-label">Before</div></div>
@@ -1499,7 +1541,7 @@ async function genEmpty(id){
   showToast(`Sending ${room.name} to OpenAI for furniture removal…`);
   try{
     const resultUrl=await callOpenAIInpaint(room.src);
-    room.empty=resultUrl;
+    room.empty=await uploadToBlob(resultUrl,`${room.id}-empty-${Date.now()}.png`);
     room.emptyCanvas=null;
     room.processing=false;
     renderEmpty();updateDashboard();
@@ -1523,13 +1565,14 @@ function uploadEmptyPhoto(roomId, input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const room = S.rooms.find(r => r.id == roomId);
     if (!room) return;
-    room.empty = e.target.result;
+    room.empty = await uploadToBlob(e.target.result, `${roomId}-empty-upload-${Date.now()}.png`);
     room.emptyCanvas = null;
     renderEmpty();
     updateDashboard();
+    scheduleSave();
     showToast(`✓ Custom empty room photo set for ${room.name}`);
   };
   reader.readAsDataURL(file);
@@ -1541,14 +1584,16 @@ function uploadAfterPhoto(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const room = S.rooms[S.activeRoom];
     if (!room) return;
-    room.after = e.target.result;
-    if (room.views && room.views[S.activeView]) room.views[S.activeView].after = e.target.result;
+    const blobUrl = await uploadToBlob(e.target.result, `${room.id}-after-upload-${Date.now()}.png`);
+    room.after = blobUrl;
+    if (room.views && room.views[S.activeView]) room.views[S.activeView].after = blobUrl;
     if (!room.brief) room.brief = { preset: S.preset, location: '', budget: '', notes: '', signatureMoment: false };
     renderDesign();
     updateDashboard();
+    scheduleSave();
     showToast(`✓ Custom design photo set for ${room.name}`);
   };
   reader.readAsDataURL(file);
@@ -1570,7 +1615,10 @@ function renderDesign(){
   noR.style.display='none';ct.style.display='block';
 
   document.getElementById('design-tabs').innerHTML=S.rooms.map((r,i)=>
-    `<button class="btn ${i===S.activeRoom?'btn-primary':'btn-outline'} btn-sm" onclick="setActiveRoom(${i})">${r.name}</button>`
+    `<span style="display:inline-flex;align-items:center;gap:0;">
+      <button class="btn ${i===S.activeRoom?'btn-primary':'btn-outline'} btn-sm" onclick="setActiveRoom(${i})" style="border-radius:var(--radius) 0 0 var(--radius);border-right:none;">${r.name}</button>
+      <button onclick="removeRoom('${r.id}')" title="Delete room" style="height:30px;padding:0 6px;border:1px solid ${i===S.activeRoom?'var(--accent)':'var(--border)'};border-left:none;border-radius:0 var(--radius) var(--radius) 0;background:${i===S.activeRoom?'var(--accent)':'white'};color:${i===S.activeRoom?'white':'var(--muted)'};cursor:pointer;font-size:10px;line-height:1;" onmouseover="this.style.color='#c0504a'" onmouseout="this.style.color='${i===S.activeRoom?'white':'var(--muted)'}'">✕</button>
+    </span>`
   ).join('');
 
   const room=S.rooms[S.activeRoom];
@@ -1808,8 +1856,9 @@ async function generateAfter() {
 
   try {
     const result = await callOpenAIImg2Img(base, prompt);
-    view.after = result;
-    if (S.activeView === 0) { room.after = result; room.brief = brief; }
+    const blobAfter = await uploadToBlob(result, `${room.id}-after-${S.activeView}-${Date.now()}.png`);
+    view.after = blobAfter;
+    if (S.activeView === 0) { room.after = blobAfter; room.brief = brief; }
     renderDesign();
     updateDashboard();
     scheduleSave();
@@ -3006,6 +3055,7 @@ function renderSourcing(){
               <button class="act-btn rej ${isRejected?'accd':''}" onclick="rejectRoomItem('${room.id}','${item.id}',this)" title="${isRejected?'Rejected — click to undo':'Reject'}">✕</button>
               <button class="act-btn" onclick="swapRoomItem('${room.id}','${item.id}')" title="Swap for alternative">⇄</button>
               <button class="act-btn" onclick="editRoomItem('${room.id}','${item.id}')" title="Edit this item" style="font-size:9px;">✎</button>
+              <button class="act-btn" onclick="if(confirm('Delete this item?'))dropRoomItem('${room.id}','${item.id}')" title="Delete item" style="font-size:10px;color:#C4847A;border-color:#C4847A;">🗑</button>
             </div>
           </div>
         </td>
@@ -3340,20 +3390,48 @@ function saveCustomItem(){
 
 // ── Budget ────────────────────────────────────
 function updateBudget(){
-  let totalItems = 0, totalAcc = 0, totalCost = 0, totalAff = 0;
-  Object.values(S.sourcing).forEach(items => {
-    totalItems += items.length;
+  let totalAcc = 0, totalCost = 0, totalAff = 0;
+  const roomRows = [];
+
+  S.rooms.forEach(room => {
+    const items = S.sourcing[room.id] || [];
     const acc = items.filter(x => x.status === 'accepted');
+    const roomCost = acc.reduce((s, x) => s + x.price, 0);
+    const roomAff  = acc.reduce((s, x) => s + x.price * x.comm / 100, 0);
     totalAcc  += acc.length;
-    totalCost += acc.reduce((s, x) => s + x.price, 0);
-    totalAff  += acc.reduce((s, x) => s + x.price * x.comm / 100, 0);
+    totalCost += roomCost;
+    totalAff  += roomAff;
+    if (acc.length > 0) {
+      roomRows.push({ name: room.name, cost: roomCost, count: acc.length });
+    }
   });
+
   const aff = Math.round(totalAff);
   document.getElementById('budget-total').textContent    = '$' + totalCost.toLocaleString();
-  document.getElementById('accepted-label').textContent  = `${totalAcc} of ${totalItems}`;
+  document.getElementById('accepted-label').textContent  = `${totalAcc}`;
   document.getElementById('affiliate-label').textContent = '+$' + aff.toLocaleString();
   document.getElementById('net-label').textContent       = '$' + (totalCost - aff).toLocaleString();
   document.getElementById('stat-budget').textContent     = '$' + totalCost.toLocaleString();
+
+  // Per-room breakdown
+  const perRoomWrap = document.getElementById('per-room-budget');
+  const perRoomRows = document.getElementById('per-room-budget-rows');
+  if (perRoomWrap && perRoomRows) {
+    if (roomRows.length > 0) {
+      perRoomWrap.style.display = 'block';
+      perRoomRows.innerHTML = roomRows.map(r =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;border-bottom:1px solid var(--ivory-dark);">
+          <div style="color:var(--charcoal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;" title="${r.name}">${r.name}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <span style="font-size:10px;color:var(--muted);">${r.count} item${r.count!==1?'s':''}</span>
+            <span style="font-weight:500;color:var(--charcoal);">$${r.cost.toLocaleString()}</span>
+          </div>
+        </div>`
+      ).join('');
+    } else {
+      perRoomWrap.style.display = 'none';
+    }
+  }
 }
 // ═══ M5: HEADLINE TEMPLATES ══════════════════
 const ROOM_HEADLINES = {
@@ -3423,7 +3501,30 @@ function pickTheme(el) {
   if (wrap && wrap.querySelector('.book-page')) buildDesignBook();
 }
 
+function renderBookRoomToggles() {
+  const container = document.getElementById('book-room-toggles');
+  if (!container) return;
+  if (!S.rooms.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--muted-light);font-style:italic;">Upload rooms in M1 first.</div>';
+    return;
+  }
+  container.innerHTML = S.rooms.map(r => {
+    const checked = r.included !== false;
+    return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleRoomInBook('${r.id}', this.checked)">
+      <span style="flex:1;">${r.name}</span>
+      <span style="font-size:10px;color:var(--muted);background:var(--ivory-dark);padding:1px 6px;border-radius:3px;">${r.type}</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleRoomInBook(roomId, included) {
+  const room = S.rooms.find(r => String(r.id) === String(roomId));
+  if (room) { room.included = included; scheduleSave(); }
+}
+
 function renderBook() {
+  renderBookRoomToggles();
   // Update room checklist on right panel
   const list = document.getElementById('book-room-checklist');
   if (!list) return;
@@ -3580,6 +3681,8 @@ async function buildDesignBook() {
   const incRooms   = document.getElementById('inc-rooms')?.checked !== false;
   const incSource  = document.getElementById('inc-sourcing')?.checked !== false;
   const incNext    = document.getElementById('inc-nextsteps')?.checked !== false;
+  // Only include rooms the designer has checked in the "Rooms to include" panel
+  const activeRooms = S.rooms.filter(r => r.included !== false);
 
   // Helper: section header HTML
   const sectionHdr = (label) => `
@@ -3589,9 +3692,9 @@ async function buildDesignBook() {
       <div class="db-section-hdr-line"></div>
     </div>`;
 
-  // Generate notes for each room
+  // Generate notes for each included room
   if (incRooms) {
-    for (const room of S.rooms) {
+    for (const room of activeRooms) {
       BOOK_NOTES[room.id] = await generateRoomNotes(room);
     }
   }
@@ -3600,7 +3703,7 @@ async function buildDesignBook() {
 
   // ── Cover ──────────────────────────────────────────────────
   if (incCover) {
-    const heroRoom = S.rooms.find(r => r.after) || S.rooms.find(r => r.src) || S.rooms[0];
+    const heroRoom = activeRooms.find(r => r.after) || activeRooms.find(r => r.src) || activeRooms[0];
     const heroImg = toImgSrc(heroRoom ? (heroRoom.after || heroRoom.src) : '');
 
     pages.push(`
@@ -3626,22 +3729,22 @@ async function buildDesignBook() {
       <div class="book-page theme-${theme}">
         <div class="db-index">
           <div class="db-index-eyebrow">Contents</div>
-          ${S.rooms.map((r, i) => `
+          ${activeRooms.map((r, i) => `
             <div class="db-index-row">
               <div class="db-index-num">${String(i+1).padStart(2,'0')}</div>
               <div class="db-index-name">${r.name}</div>
               <div class="db-index-type">${r.type}</div>
             </div>`).join('')}
-          ${incSource ? `<div class="db-index-row"><div class="db-index-num">${String(S.rooms.length+1).padStart(2,'0')}</div><div class="db-index-name">Sourcing &amp; Shopping List</div><div class="db-index-type">All Rooms</div></div>` : ''}
-          ${incNext ? `<div class="db-index-row"><div class="db-index-num">${String(S.rooms.length+(incSource?2:1)).padStart(2,'0')}</div><div class="db-index-name">Next Steps</div><div class="db-index-type">Action Plan</div></div>` : ''}
+          ${incSource ? `<div class="db-index-row"><div class="db-index-num">${String(activeRooms.length+1).padStart(2,'0')}</div><div class="db-index-name">Sourcing &amp; Shopping List</div><div class="db-index-type">All Rooms</div></div>` : ''}
+          ${incNext ? `<div class="db-index-row"><div class="db-index-num">${String(activeRooms.length+(incSource?2:1)).padStart(2,'0')}</div><div class="db-index-name">Next Steps</div><div class="db-index-type">Action Plan</div></div>` : ''}
         </div>
       </div>`);
   }
 
   // ── Per-room pages ─────────────────────────────────────────
   if (incRooms) {
-    for (let i = 0; i < S.rooms.length; i++) {
-      const room = S.rooms[i];
+    for (let i = 0; i < activeRooms.length; i++) {
+      const room = activeRooms[i];
       const notes   = BOOK_NOTES[room.id] || getDefaultNotes(room);
       const headline = getRoomHeadline(room);
       const subtitle = room.brief?.location ? `${room.type} · ${room.brief.location}` : room.type;
@@ -3751,7 +3854,7 @@ async function buildDesignBook() {
 
   // ── Sourcing pages ─────────────────────────────────────────
   if (incSource) {
-    const roomsWithItems = S.rooms.filter(r => S.sourcing[r.id] && S.sourcing[r.id].some(x => x.status === 'accepted'));
+    const roomsWithItems = activeRooms.filter(r => S.sourcing[r.id] && S.sourcing[r.id].some(x => x.status === 'accepted'));
     for (const room of roomsWithItems) {
       const accepted = (S.sourcing[room.id] || []).filter(x => x.status === 'accepted');
       const total = accepted.reduce((s, x) => s + x.price, 0);
@@ -4354,12 +4457,13 @@ async function buildLookbook() {
   const incRooms  = document.getElementById('inc-rooms')?.checked !== false;
   const incSource = document.getElementById('inc-sourcing')?.checked !== false;
   const incNext   = document.getElementById('inc-nextsteps')?.checked !== false;
+  const activeRooms = S.rooms.filter(r => r.included !== false);
 
   let pages = [];
 
   // ── Cover ──────────────────────────────────
   if (incCover) {
-    const heroRoom = S.rooms.find(r => r.after) || S.rooms.find(r => r.src) || S.rooms[0];
+    const heroRoom = activeRooms.find(r => r.after) || activeRooms.find(r => r.src) || activeRooms[0];
     const heroImg  = toImgSrc(heroRoom ? (heroRoom.after || heroRoom.src) : '');
     pages.push(`
       <div class="lb-page">
@@ -4384,21 +4488,21 @@ async function buildLookbook() {
       <div class="lb-page">
         <div class="lb-index">
           <div class="lb-index-eyebrow">Contents</div>
-          ${S.rooms.map((r, i) => `
+          ${activeRooms.map((r, i) => `
             <div class="lb-index-row">
               <div class="lb-index-num">${String(i+1).padStart(2,'0')}</div>
               <div class="lb-index-name">${r.name}</div>
               <div class="lb-index-type">${r.type}</div>
             </div>`).join('')}
-          ${incSource ? `<div class="lb-index-row"><div class="lb-index-num">${String(S.rooms.length+1).padStart(2,'0')}</div><div class="lb-index-name">Shopping List</div><div class="lb-index-type">All Rooms</div></div>` : ''}
+          ${incSource ? `<div class="lb-index-row"><div class="lb-index-num">${String(activeRooms.length+1).padStart(2,'0')}</div><div class="lb-index-name">Shopping List</div><div class="lb-index-type">All Rooms</div></div>` : ''}
         </div>
       </div>`);
   }
 
   // ── Per-room pages ─────────────────────────
   if (incRooms) {
-    for (let i = 0; i < S.rooms.length; i++) {
-      const room     = S.rooms[i];
+    for (let i = 0; i < activeRooms.length; i++) {
+      const room     = activeRooms[i];
       const minNotes = getMinimalNotes(room);
       const afterSrc = toImgSrc(room.after);
       const origSrc  = toImgSrc((room.views && room.views[0] && room.views[0].src) || room.src);
@@ -4432,7 +4536,7 @@ async function buildLookbook() {
 
   // ── Sourcing pages ─────────────────────────
   if (incSource) {
-    const roomsWithItems = S.rooms.filter(r => S.sourcing[r.id] && S.sourcing[r.id].some(x => x.status === 'accepted'));
+    const roomsWithItems = activeRooms.filter(r => S.sourcing[r.id] && S.sourcing[r.id].some(x => x.status === 'accepted'));
     for (const room of roomsWithItems) {
       const accepted = (S.sourcing[room.id] || []).filter(x => x.status === 'accepted');
       const total    = accepted.reduce((s, x) => s + x.price, 0);
@@ -4679,12 +4783,58 @@ async function loadProject() {
   } catch(e) { console.warn('Revelere load error:', e); return false; }
 }
 
+// ═══ SEED DATA ════════════════════════════════
+// Hardcoded San Diego project — loads on first visit to any new device.
+// IDB data always takes priority; this is the fallback for fresh browsers.
+const SEED_DATA = {
+  propName: 'San Diego',
+  preset: 'Coastal',
+  signatureMoment: true,
+  coreEnabled: true,
+  moodLevel: 80,
+  rooms: [
+    { id: 1775701218662.0718, name: 'Living Room', type: 'Living Room', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: 'San Diego Market', budget: 'High-end ($8,000\u2013$15,000)', notes: 'Signature designed focus on left back wall with 10ft tall painting of Pacific Coast Highway with the ocean view and sunset. Instagram moment with vintage Vespa in view. ', signatureMoment: true, coreEnabled: true, moodLevel: 80 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775701228717.8923, name: 'First Floor', type: 'Guest Bedroom', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: 'San Diego Market', budget: 'High-end ($8,000\u2013$15,000)', notes: 'Create slat wall on sliding rail to cover the window when needed.  Have head of bed at the window', signatureMoment: true, coreEnabled: true, moodLevel: 80 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775701236708.5151, name: 'Dining Lounge', type: 'Dining Room', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: 'San Diego Market', budget: 'High-end ($8,000\u2013$15,000)', notes: '', signatureMoment: true, coreEnabled: true, moodLevel: 80 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762441017.22,   name: 'Dining Card Room', type: 'Dining Room', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'City', location: '', budget: 'Ultra Luxury ($15,000+)', notes: 'Features 8 person round card table that is also a dining table with luxurious comfortable swivel chairs. Added artwork tying in California gathering.', signatureMoment: true, coreEnabled: true, moodLevel: 80 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762445321.9858, name: 'Kitchen', type: 'Kitchen', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: '', budget: 'Ultra Luxury ($15,000+)', notes: 'Bronze set of pots and pans hanging on the pot holder above the kitchen counter', signatureMoment: true, coreEnabled: true, moodLevel: 80 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762470510.265,  name: 'Living Room Window View', type: 'Living Room', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: null, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762494372.125,  name: '2nd Floor', type: 'Guest Bedroom', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: '', budget: '', notes: '', signatureMoment: false }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762530106.055,  name: '2nd Floor Closet', type: 'Guest Bedroom', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: null, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762553037.5017, name: 'Master', type: 'Primary Suite', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: '', budget: 'Ultra Luxury ($15,000+)', notes: '', signatureMoment: true, coreEnabled: true, moodLevel: 80 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762584070.267,  name: 'Guest 2nd Floor', type: 'Bathroom', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: '', budget: '', notes: '', signatureMoment: false }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762603630.6025, name: 'Bunk Room', type: 'Guest Bedroom', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: '', budget: '', notes: '', signatureMoment: false }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762624213.5425, name: 'Bunk Room View 2', type: 'Guest Bedroom', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: null, views: [] },
+    { id: 1775762643014.919,  name: 'Master Bath', type: 'Primary Suite', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: '', budget: '', notes: '', signatureMoment: false }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+    { id: 1775762671101.5715, name: 'Back Yard', type: 'Outdoor Space', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: null, views: [] },
+    { id: 1775762766045.3413, name: 'Garage Before', type: 'Media Room', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: null, views: [] },
+    { id: 1776029426720.0112, name: 'Dining Nook', type: 'Dining Room', aiLabeled: true, src: null, empty: null, emptyCanvas: null, after: null, brief: { preset: 'Coastal', location: 'San Diego Market', budget: 'Ultra Luxury ($15,000+)', notes: 'Area will provide gathering area with some dining without obstruction the floor to ceiling window view of the central outdoor entertainment area. Utilizing barely seen chairs and minimal artistic glass table with bronze base which visually connecting to the overhead amber bronze pendant light.', signatureMoment: true, coreEnabled: true, moodLevel: 90 }, views: [{ src: null, empty: null, emptyCanvas: null, after: null }] },
+  ],
+};
+
 // ═══ INIT ═════════════════════════════════════
 try {
   loadProject().then(restored => {
+    if (!restored) {
+      // First visit on this device — seed the San Diego project
+      S.propName        = SEED_DATA.propName;
+      S.preset          = SEED_DATA.preset;
+      S.signatureMoment = SEED_DATA.signatureMoment;
+      S.coreEnabled     = SEED_DATA.coreEnabled;
+      S.moodLevel       = SEED_DATA.moodLevel;
+      S.rooms           = SEED_DATA.rooms.map(r => ({ ...r, processing: false }));
+      const pni = document.getElementById('prop-name-input');
+      if (pni) pni.value = S.propName;
+      const sbn = document.getElementById('sb-name');
+      if (sbn) sbn.textContent = S.propName;
+      saveProject();
+    }
     renderDashboard();
-    if (restored && S.rooms.length) {
-      showToast(`✓ Project restored — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''}`);
+    if (S.rooms.length) {
+      showToast(restored
+        ? `✓ Project restored — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''}`
+        : `✓ San Diego project loaded — ${S.rooms.length} rooms`
+      );
     }
   });
 } catch(e) {

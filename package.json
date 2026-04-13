@@ -6,8 +6,16 @@
     "dev": "npx serve . -p 3000",
     "start": "npx serve . -p 3000"
   },
-  "keywords": ["revelere", "STR", "interior-design", "AI"],
+  "keywords": [
+    "revelere",
+    "STR",
+    "interior-design",
+    "AI"
+  ],
   "author": "Revelere",
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@vercel/blob": "^2.3.3"
+  }
 }
