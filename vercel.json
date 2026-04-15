@@ -1,3 +1,10 @@
 {
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "functions": {
+    "api/openai-images.js":   { "maxDuration": 300 },
+    "api/openai-generate.js": { "maxDuration": 300 },
+    "api/anthropic.js":       { "maxDuration": 60  },
+    "api/blob-upload.js":     { "maxDuration": 60  },
+    "api/manifest.js":        { "maxDuration": 30  }
+  }
 }
