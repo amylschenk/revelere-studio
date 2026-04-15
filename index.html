@@ -316,6 +316,21 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 .theme-dark .db-item-name, .theme-minimal .db-item-name, .theme-cinematic .db-item-name { color: #D6C8B3; }
 .theme-dark .db-item-price, .theme-minimal .db-item-price, .theme-cinematic .db-item-price { color: #D6C8B3; }
 
+/* ── Photo index ── */
+.db-photo-index { padding: 28px 32px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.db-photo-index-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(166,124,82,0.2); }
+.db-photo-index-eyebrow { font-size: 9px; letter-spacing: 0.42em; text-transform: uppercase; color: #A67C52; }
+.db-photo-index-count { font-size: 9px; color: #8A7E70; letter-spacing: 0.06em; }
+.db-photo-index-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 14px; flex: 1; }
+.db-photo-index-cell { display: flex; flex-direction: column; gap: 0; }
+.db-photo-index-img { width: 100%; aspect-ratio: 4/3; overflow: hidden; border-radius: 2px; background: #EDE9E3; }
+.db-photo-index-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.db-photo-index-caption { padding: 5px 2px 2px; display: flex; justify-content: space-between; align-items: baseline; }
+.db-photo-index-name { font-size: 11px; font-weight: 500; color: #1B1B1B; }
+.db-photo-index-type { font-size: 9px; color: #8A7E70; letter-spacing: 0.06em; }
+.theme-dark .db-photo-index-name, .theme-minimal .db-photo-index-name, .theme-cinematic .db-photo-index-name { color: #D6C8B3; }
+.theme-dark .db-photo-index-type, .theme-minimal .db-photo-index-type, .theme-cinematic .db-photo-index-type { color: #8A7E70; }
+.theme-dark .db-photo-index-header, .theme-minimal .db-photo-index-header, .theme-cinematic .db-photo-index-header { border-bottom-color: rgba(166,124,82,0.2); }
 /* ── Budget summary ── */
 .db-budget { padding: 36px 48px; }
 .db-budget-eyebrow { font-size: 9px; letter-spacing: 0.42em; text-transform: uppercase; color: #A67C52; margin-bottom: 10px; }
@@ -1073,7 +1088,8 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
             <span class="book-opt-label">Include sections</span>
             <div style="display:flex;flex-direction:column;gap:7px;">
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-cover" checked> Cover + index</label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-rooms" checked> Per-room photos</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-photos" checked> Photo index</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-rooms" checked> Per-room detail pages</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-sourcing" checked> Shopping list</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-budget" checked> Budget summary</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-nextsteps"> Next steps checklist</label>
@@ -4022,6 +4038,7 @@ async function buildDesignBook() {
   const date = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const preset = S.preset || 'Revelere Core';
   const incCover   = document.getElementById('inc-cover')?.checked !== false;
+  const incPhotos  = document.getElementById('inc-photos')?.checked !== false;
   const incRooms   = document.getElementById('inc-rooms')?.checked !== false;
   const incSource  = document.getElementById('inc-sourcing')?.checked !== false;
   const incBudget  = document.getElementById('inc-budget')?.checked !== false;
@@ -4080,11 +4097,48 @@ async function buildDesignBook() {
               <div class="db-index-name">${r.name}</div>
               <div class="db-index-type">${r.type}</div>
             </div>`).join('')}
-          ${incSource ? `<div class="db-index-row"><div class="db-index-num">${String(activeRooms.length+1).padStart(2,'0')}</div><div class="db-index-name">Sourcing &amp; Shopping List</div><div class="db-index-type">All Rooms</div></div>` : ''}
-          ${incBudget ? `<div class="db-index-row"><div class="db-index-num">${String(activeRooms.length+(incSource?1:0)+1).padStart(2,'0')}</div><div class="db-index-name">Investment Summary</div><div class="db-index-type">Budget Breakdown</div></div>` : ''}
-          ${incNext ? `<div class="db-index-row"><div class="db-index-num">${String(activeRooms.length+(incSource?1:0)+(incBudget?1:0)+1).padStart(2,'0')}</div><div class="db-index-name">Next Steps</div><div class="db-index-type">Action Plan</div></div>` : ''}
+          ${incPhotos ? `<div class="db-index-row"><div class="db-index-num">—</div><div class="db-index-name">Photo Index</div><div class="db-index-type">All Renders</div></div>` : ''}
+          ${incSource ? `<div class="db-index-row"><div class="db-index-num">—</div><div class="db-index-name">Sourcing &amp; Shopping List</div><div class="db-index-type">All Rooms</div></div>` : ''}
+          ${incBudget ? `<div class="db-index-row"><div class="db-index-num">—</div><div class="db-index-name">Investment Summary</div><div class="db-index-type">Budget Breakdown</div></div>` : ''}
+          ${incNext ? `<div class="db-index-row"><div class="db-index-num">—</div><div class="db-index-name">Next Steps</div><div class="db-index-type">Action Plan</div></div>` : ''}
         </div>
       </div>`);
+  }
+
+  // ── Photo index pages ──────────────────────────────────────
+  if (incPhotos) {
+    // Collect rooms that have a final photo (after render or custom upload)
+    const photoRooms = activeRooms.filter(r => r.after);
+    if (photoRooms.length > 0) {
+      const perPage = 6;
+      for (let p = 0; p < photoRooms.length; p += perPage) {
+        const chunk = photoRooms.slice(p, p + perPage);
+        const pageNum = Math.floor(p / perPage) + 1;
+        const totalPages = Math.ceil(photoRooms.length / perPage);
+        pages.push(`
+          <div class="book-page theme-${theme}">
+            <div class="db-photo-index">
+              <div class="db-photo-index-header">
+                <div class="db-photo-index-eyebrow">Photo Index · ${name}</div>
+                <div class="db-photo-index-count">${photoRooms.length} room${photoRooms.length !== 1 ? 's' : ''}${totalPages > 1 ? ' · Page ' + pageNum + ' of ' + totalPages : ''}</div>
+              </div>
+              <div class="db-photo-index-grid">
+                ${chunk.map(room => `
+                  <div class="db-photo-index-cell">
+                    <div class="db-photo-index-img">
+                      <img src="${toImgSrc(room.after)}" alt="${room.name}">
+                    </div>
+                    <div class="db-photo-index-caption">
+                      <div class="db-photo-index-name">${room.name}</div>
+                      <div class="db-photo-index-type">${room.type}</div>
+                    </div>
+                  </div>`).join('')}
+                ${chunk.length % 2 !== 0 ? '<div class="db-photo-index-cell"></div>' : ''}
+              </div>
+            </div>
+          </div>`);
+      }
+    }
   }
 
   // ── Per-room pages ─────────────────────────────────────────
@@ -4849,6 +4903,7 @@ async function buildLookbook() {
   const date   = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const preset = S.preset || 'Revelere Core';
   const incCover  = document.getElementById('inc-cover')?.checked !== false;
+  const incPhotos = document.getElementById('inc-photos')?.checked !== false;
   const incRooms  = document.getElementById('inc-rooms')?.checked !== false;
   const incSource = document.getElementById('inc-sourcing')?.checked !== false;
   const incBudget = document.getElementById('inc-budget')?.checked !== false;
@@ -4893,6 +4948,41 @@ async function buildLookbook() {
           ${incSource ? `<div class="lb-index-row"><div class="lb-index-num">${String(activeRooms.length+1).padStart(2,'0')}</div><div class="lb-index-name">Shopping List</div><div class="lb-index-type">All Rooms</div></div>` : ''}
         </div>
       </div>`);
+  }
+
+  // ── Photo index pages (Lookbook) ────────────
+  if (incPhotos) {
+    const photoRooms = activeRooms.filter(r => r.after);
+    if (photoRooms.length > 0) {
+      const perPage = 6;
+      for (let p = 0; p < photoRooms.length; p += perPage) {
+        const chunk = photoRooms.slice(p, p + perPage);
+        const pageNum = Math.floor(p / perPage) + 1;
+        const totalPages = Math.ceil(photoRooms.length / perPage);
+        pages.push(`
+          <div class="lb-page">
+            <div class="db-photo-index">
+              <div class="db-photo-index-header">
+                <div class="db-photo-index-eyebrow">Photo Index · ${name}</div>
+                <div class="db-photo-index-count">${photoRooms.length} room${photoRooms.length !== 1 ? 's' : ''}${totalPages > 1 ? ' · Page ' + pageNum + ' of ' + totalPages : ''}</div>
+              </div>
+              <div class="db-photo-index-grid">
+                ${chunk.map(room => `
+                  <div class="db-photo-index-cell">
+                    <div class="db-photo-index-img">
+                      <img src="${toImgSrc(room.after)}" alt="${room.name}">
+                    </div>
+                    <div class="db-photo-index-caption">
+                      <div class="db-photo-index-name">${room.name}</div>
+                      <div class="db-photo-index-type">${room.type}</div>
+                    </div>
+                  </div>`).join('')}
+                ${chunk.length % 2 !== 0 ? '<div class="db-photo-index-cell"></div>' : ''}
+              </div>
+            </div>
+          </div>`);
+      }
+    }
   }
 
   // ── Per-room pages ─────────────────────────
