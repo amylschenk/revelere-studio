@@ -5275,6 +5275,7 @@ try {
       saveProject();
     }
     renderDashboard();
+    renderRooms();
     if (S.rooms.length) {
       showToast(restored
         ? `✓ Project restored — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''}`
