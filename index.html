@@ -1943,25 +1943,25 @@ The result should feel like a film noir interior that someone actually lives in 
 };
 
 const ROOM_TYPE_PROMPTS = {
-  'Living Room': `Room type: Living Room. Design a connection-focused living space. Anchor with a generous sofa or sectional, a statement coffee table, and layered lighting (floor lamp, table lamp, ambient). Style the coffee table with intentional objects — books, a tray, one sculptural piece. The seating arrangement should invite conversation, not face a TV. Add a large-format artwork or textured wall treatment as a backdrop.`,
+  'Living Room': `Room type: Living Room. The seating faces a focal point — fireplace, view, or artwork — not a television. A sofa or sectional anchors the room, a coffee table holds real objects, and at least two separate light sources create depth at different heights. The arrangement should feel like somewhere people settle in and lose track of the time, not a room they pass through.`,
 
-  'Primary Suite': `Room type: Primary Suite. Design an intimate, hotel-calibre bedroom. Centre a king platform bed with a high upholstered headboard. Layer the bedding in linen or high-thread cotton — plush but structured. Add bedside tables with warm pendant or table lamps. Include one soft seating moment (bench, chair, or chaise). Window treatments should be floor-to-ceiling and generous. The room should feel like a private sanctuary.`,
+  'Primary Suite': `Room type: Primary Suite. The bed is the architecture of this room — centre it, frame it, and make everything else serve it. Floor-length window treatments on every window. Warm light from both sides of the bed. One seating moment at the foot or in a corner: a bench, a chair, a chaise. The metric is whether a guest lies down and considers not checking out.`,
 
-  'Kitchen': `Room type: Kitchen. Keep all cabinetry, appliances, and layout exactly as-is — do not alter the structure. Style the countertops with intentional objects: a wooden cutting board, a ceramic bowl of fruit, a small potted herb, a quality coffee setup. Add warmth through a textured rug if space allows, pendant lighting over the island, and one or two curated accessories. The kitchen should feel lived-in, warm, and high-end — not sterile or over-staged.`,
+  'Kitchen': `Room type: Kitchen. Keep all cabinetry, appliances, and layout exactly as-is — do not alter the structure. Add warmth through what's on and around the surfaces: a quality cutting board, ceramics, fresh herbs, a considered coffee setup. Pendant lighting over the island where the architecture supports it. The kitchen should feel like someone actually cooks here — lived-in, not over-staged.`,
 
-  'Guest Bedroom': `Room type: Guest Bedroom. Design a welcoming, boutique hotel-style guest room. A well-made queen bed with layered bedding and structured pillows is the anchor. Add a bedside lamp on each side, one piece of art, and a small plant or vase. Keep it clean and uncluttered — the goal is a guest feeling immediately at ease and well taken care of.`,
+  'Guest Bedroom': `Room type: Guest Bedroom. The room that earns the extra night. A well-made queen bed is the only element that needs to say anything. Add a warm lamp on each side, one piece of art at the right scale for the wall, one plant or fresh stems. Nothing else. The room should make guests feel genuinely taken care of — not just accommodated.`,
 
-  'Office': `Room type: Home Office. Design a refined, inspiring workspace. Include a quality desk with a clean surface — one lamp, one plant, minimal objects. A comfortable desk chair that looks as good as it functions. Built-in shelving or a single bookcase styled with books and objects. The space should feel productive and calm — serious but not corporate. Natural light should be maximised.`,
+  'Office': `Room type: Home Office. A desk that takes work seriously and a chair worth four hours. Natural light first, task lamp second. One well-placed plant, open shelving with real books and real objects. The surface is clear. The room should feel like the kind of place that produces something worth producing — serious without being corporate.`,
 
-  'Dining Room': `Room type: Dining Room. Centre a dining table sized appropriately for the room — seat it with upholstered or sculptural chairs. Hang a statement pendant or chandelier directly overhead, centred on the table. Style the table simply: a centrepiece (candles, a low vessel, botanicals), linen napkins. The room should feel like a place people linger after dinner.`,
+  'Dining Room': `Room type: Dining Room. A table sized for the room, seated with chairs that invite staying past the meal. One pendant or chandelier hung directly above — low enough to feel intimate, centred on the table with precision. A centrepiece that doesn't compete with conversation. The room should feel like dinner here becomes the plan, not the backup.`,
 
-  'Outdoor Space': `Room type: Outdoor Space. Design a sophisticated outdoor living area. Include weather-appropriate lounge furniture with quality cushions, a low table, ambient lighting (string lights, lanterns, or uplighting). Add greenery — planters, climbers, or potted trees. The space should feel like an extension of the interior — curated, comfortable, and atmospheric. Evening mood is the target.`,
+  'Outdoor Space': `Room type: Outdoor Space. Design this as a room, not a patio. Furniture grouped for conversation and long evenings — not scattered. One lighting moment that extends the space past sunset: a fire feature, string lights strung low, or perimeter uplighting. Greenery that looks like it belongs there. The view, if there is one, is the sixth wall — design toward it.`,
 
-  'Bathroom': `Room type: Bathroom. Keep all fixtures, tiles, and plumbing exactly as-is — do not alter the structure. Style with quality towels (folded or hung intentionally), a tray on the vanity with a candle, a small plant or vase of stems, quality soap or skincare objects. Add a mirror with character if the current one is plain. Lighting should feel spa-like and warm. The result should feel like a boutique hotel bathroom.`,
+  'Bathroom': `Room type: Bathroom. Keep all fixtures, plumbing, and tile exactly as-is — do not alter the structure. Style the vanity: a tray, a candle, real stems or a small plant, quality soap. Towels folded as if someone will photograph them — because they will. The lighting should feel warm, flattering, and like a hotel that knows your name.`,
 
-  'Media Room': `Room type: Media Room. Design a cinematic, cocooning media space. Deep sofas or a sectional facing the screen, with ottomans. Layered low lighting — no overhead glare. Acoustic-friendly textiles: rugs, curtains, upholstered walls if appropriate. Keep the screen as the focal point but make the room feel like a luxury screening room, not a big-box electronics store.`,
+  'Media Room': `Room type: Media Room. Seating faces the screen at the right distance — a sofa or sectional deep enough to disappear into. No overhead glare. Heavy textiles absorb sound and signal comfort: rugs, upholstered surfaces, floor-length curtains. The room should feel like somewhere worth spending the whole evening without apology.`,
 
-  'Entryway': `Room type: Entryway. Design a first impression that sets the tone for the entire property. A console table with a mirror above it. One statement pendant or wall sconce. A small tray or bowl for keys. One plant or floral arrangement. The floor should be clear — a single rug if the space allows. This space should feel considered, welcoming, and give an immediate sense of the property's quality.`,
+  'Entryway': `Room type: Entryway. The first moment and the last. A console, a mirror above it at the right height, one light source that was chosen rather than installed, one plant or vase, one rug if the floor allows. Nothing else. The edit is the design — what was left out is as important as what remains.`,
 };
 
 // Fallback for unrecognised room types
@@ -1969,7 +1969,7 @@ function getRoomTypePrompt(roomType) {
   return ROOM_TYPE_PROMPTS[roomType] || `Room type: ${roomType}. Design this space to the highest Revelere standard — thoughtfully furnished, beautifully lit, and styled with intentional objects. The result should feel elevated, livable, and magazine-ready.`;
 }
 
-const SIGNATURE_MOMENT_PROMPT = `Include one Signature Moment — a single unforgettable, Instagram-worthy focal point that feels artistic and intentional, not gimmicky. This could be a dramatic statement light fixture, an unexpected material pairing, a perfectly styled vignette, a cascading textile, a sculptural art piece, or a moody reading nook. It should stop someone mid-scroll. Make it feel discovered, not staged.`;
+const SIGNATURE_MOMENT_PROMPT = `Include one Signature Moment — a single element that stops mid-scroll without announcing itself. It could be a statement fixture that changes the quality of light in the entire room, a material pairing that reads as discovered rather than specified, or a vignette composed tight enough to feel like a secret. It should feel like the best photograph from the shoot — the one that earned the whole story. Make it feel found, not placed.`;
 
 function onSigToggle(){
   S.signatureMoment = document.getElementById('sig-toggle').checked;
@@ -3104,10 +3104,10 @@ function generateAlternativeItem(oldItem, room) {
     : pool[Math.floor(Math.random() * pool.length)];
 
   const styleContext = {
-    'Mountain': 'warm wood tones and cozy layered textures',
-    'Desert': 'warm earth tones and organic shapes',
-    'Coastal': 'light finishes and airy materials',
-    'City': 'sleek materials and sculptural modern forms',
+    'Mountain': 'the PRIMAL STILLNESS archetype — darkened timber, raw stone, and deep wool in an atmosphere of earned quiet',
+    'Desert':   'the SOLAR VEIL archetype — limewash, terracotta, and hand-formed ceramics in the tonal warmth of extreme light',
+    'Coastal':  'the SALT & SILK archetype — bleached oak, undyed linen, and natural fiber at the highest register of the California coast',
+    'City':     'the NOCTURNE METROPOLIS archetype — charcoal plaster, cognac leather, and blackened steel in the charged atmosphere of the city after dark',
   }[preset] || 'the Revelere aesthetic';
 
   return normalizeRetailItem(candidate, {
@@ -3872,21 +3872,27 @@ async function generateRoomNotes(room) {
   const location = brief.location || '';
   const items = (S.sourcing[room.id] || []).filter(x => x.status === 'accepted').slice(0, 5).map(x => x.name).join(', ');
 
-  const prompt = `You are the creative director of Revelere, a luxury STR design brand. Write four short copy blocks for a design book page. The tone is Architectural Digest meets Soho House — confident, specific, slightly seductive. Never generic.
+  const archetypeName = { Mountain: 'PRIMAL STILLNESS', Desert: 'SOLAR VEIL', Coastal: 'SALT & SILK', City: 'NOCTURNE METROPOLIS' }[preset] || preset;
+
+  const prompt = `You are the creative director of Revelere, a luxury STR design brand. Write four short copy blocks for a design book page about a specific room. The tone is Architectural Digest meets Soho House — confident, specific, slightly seductive. Never generic.
 
 Room: ${room.name} (${room.type})
-Style direction: ${preset}${location ? ' · ' + location : ''}
-Key pieces: ${items || 'not yet specified'}
+Archetype: ${archetypeName}${location ? ' · ' + location : ''}
+Key pieces in the space: ${items || 'not yet specified'}
+
+What each section means:
+- intent: The design decision that defined the room. One architectural or spatial conviction. Not a mood — a choice.
+- experience: What a guest actually does or feels here. Behavioural. Sensory. Use a specific action or hour of day.
+- materials: Two or three specific materials and why they're right together. Not a list — a relationship.
+- lighting: How the room is lit and what it communicates. Name the source, the quality, the hour it was designed for.
 
 STRICT RULES — violating any of these means the copy has failed:
-- Never use these words: curated, intentional, thoughtful, seamlessly, elevate, transform, stunning, unique, perfect, cozy, timeless, amazing, beautiful, luxurious, showcase, ensure
-- No sentences that start with "This space" or "This room"
-- No em-dash lists (no "warmth, texture, and light")
-- No filler openers ("Designed with...", "Crafted to...", "Built for...")
+- Never use: curated, intentional, thoughtful, seamlessly, elevate, transform, stunning, unique, perfect, cozy, timeless, amazing, beautiful, luxurious, showcase, ensure, inviting, sophisticated, elegant
+- No sentences starting with "This space", "This room", "Designed", "Crafted", "Built for", "Created"
+- No em-dash lists. No "warmth, texture, and light" constructions
 - Write like a person, not a brand deck
-- Use fragments when they hit harder
-- Be specific — name actual materials, moods, hours of day, physical sensations
-- Maximum 2 sentences per section. Short is better.
+- Fragments are allowed and often better
+- Maximum 2 sentences per section. Shorter is almost always correct.
 
 Return ONLY valid JSON:
 {
