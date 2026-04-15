@@ -1949,6 +1949,7 @@ async function generateAfter() {
   const view = room.views[S.activeView];
   const viewLabel = room.views.length > 1 ? ' · View ' + String.fromCharCode(65 + S.activeView) : '';
 
+  // Show loading state
   const ap = document.getElementById('after-panel');
   ap.style.background = '#2a2420';
   ap.innerHTML = '<div class="after-placeholder"><div class="icon" style="display:inline-block;animation:spin 1.8s linear infinite;">↻</div><div class="text" style="margin-top:10px;">Generating' + viewLabel + ' render…</div></div>';
@@ -1971,42 +1972,84 @@ async function generateAfter() {
     || view.src
     || room.src;
 
-  if (!base) { showToast('No source image found for this room', true); return; }
+  if (!base) {
+    ap.innerHTML = '<div class="after-placeholder"><div class="icon">✕</div><div class="text" style="margin-top:10px;color:#C4847A;">No source image found for this room</div></div>';
+    showToast('No source image found for this room', true);
+    return;
+  }
 
-  showToast('❆ Generating ' + room.name + viewLabel + ' render via OpenAI…');
+  showToast('❆ Generating ' + room.name + viewLabel + '…');
 
   const corePrompt = S.coreEnabled
     ? REVELERE_CORE_PROMPT
     : 'Transform this exact room — keep all walls, windows, ceiling height, layout, and perspective exactly as-is. Design to a high standard of interior quality.';
-  const moodPrompt = getMoodPrompt(S.moodLevel);
+  const moodPrompt    = getMoodPrompt(S.moodLevel);
   const variantPrompt = PRESET_PROMPTS[brief.preset] || '';
   const roomTypePrompt = getRoomTypePrompt(room.type || room.name);
-  const locationLine = brief.location ? 'Property location: ' + brief.location + '. Let the regional character influence materials and palette subtly.' : '';
-  const notesLine = brief.notes ? 'Additional direction from designer: ' + brief.notes : '';
+  const locationLine  = brief.location ? 'Property location: ' + brief.location + '. Let the regional character influence materials and palette subtly.' : '';
+  const notesLine     = brief.notes ? 'Additional direction from designer: ' + brief.notes : '';
   const signatureLine = brief.signatureMoment ? SIGNATURE_MOMENT_PROMPT : '';
 
   const prompt = [corePrompt, moodPrompt, variantPrompt, roomTypePrompt, signatureLine, locationLine, notesLine,
     'Photorealistic, professional interior photography, 8k, highly detailed. The result should be ready for a luxury STR listing.'
   ].filter(Boolean).join('\n\n');
 
+  // ── STEP 1: Render ────────────────────────────────────────────
+  let renderOk = false;
   try {
-    const result = await callOpenAIImg2Img(base, prompt);
+    const result  = await callOpenAIImg2Img(base, prompt);
     const blobAfter = await uploadToBlob(result, `${room.id}-after-${S.activeView}-${Date.now()}.png`);
     view.after = blobAfter;
     if (S.activeView === 0) { room.after = blobAfter; room.brief = brief; }
+    renderOk = true;
     renderDesign();
+    updateDashboard();
+    showToast('✓ Render complete — building sourcing…');
+  } catch(e) {
+    console.error('Render failed:', e);
+    // Show the error clearly in the panel so the spinner never hangs
+    ap.innerHTML = '<div class="after-placeholder"><div class="icon" style="color:#C4847A;">✕</div><div class="text" style="margin-top:10px;color:#C4847A;">' + (e.message || 'Render failed — try again') + '</div></div>';
+    showToast('Render failed: ' + (e.message || 'unknown error'), true);
+    // Try canvas fallback — wrapped so its own failure can't re-stall the UI
+    try {
+      const fallback = await applyAfterEffect(base, brief.preset);
+      view.after = fallback;
+      if (S.activeView === 0) { room.after = fallback; room.brief = brief; }
+      renderDesign();
+    } catch(fe) {
+      console.warn('Canvas fallback also failed:', fe);
+      renderDesign(); // clear the spinner regardless
+    }
     updateDashboard();
     scheduleSave();
-    showToast('✓ ' + room.name + viewLabel + ' render complete');
-  } catch(e) {
-    console.error(e);
-    showToast('OpenAI error: ' + e.message, true);
-    const fallback = await applyAfterEffect(base, brief.preset);
-    view.after = fallback;
-    if (S.activeView === 0) { room.after = fallback; room.brief = brief; }
-    renderDesign();
-    updateDashboard();
+    return; // stop pipeline on render failure
   }
+
+  // ── STEP 2: Auto-sourcing ─────────────────────────────────────
+  // Synchronous — runs immediately after render, no extra click required
+  try {
+    if (S.activeView === 0) room.brief = brief; // ensure brief is current
+    S.sourcing[room.id] = buildSourcingForRoom(room);
+    renderSourcing();
+    updateBudget();
+    showToast('✓ Sourcing ready — generating editorial notes…');
+  } catch(e) {
+    console.warn('Auto-sourcing failed:', e);
+  }
+
+  // ── STEP 3: Auto-editorial notes ──────────────────────────────
+  // Async but non-blocking — fires and resolves in background
+  // generateRoomNotes() already falls back to getDefaultNotes() on API failure
+  if (S.activeView === 0) {
+    generateRoomNotes(room).then(notes => {
+      BOOK_NOTES[room.id] = notes;
+      showToast('✓ ' + room.name + ' pipeline complete — render · sourcing · notes ready');
+    }).catch(() => {
+      // Swallowed — generateRoomNotes handles its own fallback internally
+    });
+  }
+
+  scheduleSave();
 }
 
 async function callOpenAIImg2Img(imageDataUrl, prompt){
