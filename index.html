@@ -1796,25 +1796,37 @@ The result should feel like a luxury boutique hotel meets a high-end editorial s
 
 // Per-variant additions layered on top of Core
 const PRESET_PROMPTS = {
-  'Mountain': `Infuse a luxury mountain lodge aesthetic.
-Incorporate: rich wood tones (walnut, oak, smoked finishes), stone elements (fireplace, accent walls, textures), cozy layered textiles (wool, boucle, fur throws), warm and intimate lighting.
-The space should feel like a refined high-end cabin retreat — cozy, grounded, and immersive, but not overly rustic or themed.
-Avoid cliché cabin decor. Keep it elevated, modern, and cinematic.`,
+  'Mountain': `Apply the Revelere PRIMAL STILLNESS archetype.
+This space carries the material weight of altitude — ancient, grounded, deeply still.
+Materiality: Darkened timber (smoked oak, blackened walnut), raw stone (slate, basalt, honed dark granite), boucle and wool in undyed oat, ash, and deep charcoal. Aged brass or blackened steel hardware — nothing polished, nothing that reflects light cleanly.
+Atmosphere: The quality of light just before a storm at elevation. Heavy floor-to-ceiling curtains in dark linen. Low pendant lighting and sconces only — never overhead grids. Every light source warm, directional, and deliberate. Fireplace as architectural anchor if present.
+Spatial tone: Dense. Layered. Quiet in a way that feels earned. Surfaces age beautifully rather than trying to stay new. Nothing decorative that isn't also structural.
+Avoid: Antlers, tartan, flannel, anything that reads as a themed cabin. This is not rustic — it is primal luxury. No light wood, no white walls, no Scandinavian minimalism.
+The result should feel like a private retreat designed by an architect who prefers silence over spectacle.`,
 
-  'Desert': `Infuse a refined desert luxury aesthetic.
-Incorporate: warm earth tones (sand, clay, terracotta, muted peach), plaster or limewash wall textures, organic shapes and soft curves, minimal but impactful styling.
-The space should feel warm, calm, and architectural with a soft sun-soaked glow.
-Avoid overly boho styling. Keep it clean, sculptural, and high-end.`,
+  'Desert': `Apply the Revelere SOLAR VEIL archetype.
+This space embodies the slow luxury of extreme light — sun-bleached, deeply tactile, architecture-first.
+Materiality: Limewash and tadelakt walls in warm white, sand, and blush. Terracotta tile and rammed earth tones. Hand-thrown ceramics with visible maker marks. Plaster with texture you can see. Organic forms throughout — nothing with a hard edge that isn't load-bearing.
+Atmosphere: The quality of 4pm desert light — amber, horizontal, making every surface glow from within. Sheer natural linen at all windows. Arched forms where the architecture allows. Warmth that feels geological — like the space absorbed decades of sun before anyone arrived.
+Spatial tone: Minimal in quantity, maximal in presence. Every object earns its position. No symmetry that wasn't earned. The restraint is the luxury.
+Avoid: Cacti as decoration, turquoise, Southwestern patterns, anything boho or festival-coded. This is not rustic or ethnic — it is restraint rendered in earth and light.
+The result should feel like a private riad crossed with a luxury wellness retreat — unhurried, sensory, and impossible to photograph badly.`,
 
-  'Coastal': `Infuse a luxury California coastal aesthetic.
-Incorporate: soft ocean-inspired tones (cream, sand, muted blue, warm driftwood), light wood finishes and airy textures, subtle beach references (not themed, not kitschy).
-The space should feel breezy, elevated, and romantic with a sunset-like warmth.
-Avoid nautical clichés. Keep it sophisticated, modern, and editorial.`,
+  'Coastal': `Apply the Revelere SALT & SILK archetype.
+This space captures the highest register of the California coast — washed light, effortless luxury, the elegance of things bleached and softened by proximity to open water.
+Materiality: Bleached and whitewashed oak. Undyed linen and cotton that reads as though the breeze already touched it. Sea-grass, rattan, and natural rope with precision. Palette: salt white, warm bone, soft ivory, and the grey-silver of weathered driftwood. Nothing cold, nothing synthetic.
+Atmosphere: Open, airy, and flooded with natural light. Floor-length linen drapes always. The room reads as though air moves through it even when nothing is open. The breeze is felt before any water is seen.
+Spatial tone: Relaxed but never casual. Confident in its restraint. Expensive things that look found rather than purchased. Nothing announces itself.
+Avoid: Anchors, rope coils, ship wheels, anything nautical or themed. No cold whites or grey tones that trend Scandinavian. This is warm, luminous, and entirely Californian.
+The result should feel like a Malibu residential editorial where the light arrived before the photographer and stayed.`,
 
-  'City': `Infuse a luxury urban city aesthetic.
-Incorporate: deeper tones (charcoal, black, bronze, espresso wood), sleek materials (glass, metal, leather), sculptural modern furniture.
-The space should feel bold, refined, and slightly dramatic — like a high-end penthouse or boutique hotel.
-Avoid cold or sterile minimalism. Keep warmth and depth.`,
+  'City': `Apply the Revelere NOCTURNE METROPOLIS archetype.
+This space embodies the city at its most seductive — after dark, elevated, and entirely in command of its own atmosphere.
+Materiality: Deep charcoal and near-black plaster walls. Smoked and blackened steel. Cognac and espresso leather. Dark-stained walnut and ebonized oak. Polished concrete as a base material. Bronze and unlacquered brass as the sole warmth in an otherwise deep palette.
+Atmosphere: Low and directional light only. Sculptural floor lamps. Backlit surfaces. The kind of considered darkness that flatters everything within it. City light through floor-to-ceiling glass as the ambient backdrop — the skyline as the sixth wall.
+Spatial tone: Edited, assured, and cinematically composed. Every object selected for its silhouette as much as its function. The aesthetic of a private members' club designed by someone who also directs films.
+Avoid: Cold grey minimalism, Scandinavian restraint, anything corporate or sanitized. This space has edges — they are deliberate and beautiful.
+The result should feel like a film noir interior that someone actually lives in — sophisticated, charged, and impossible to enter without pausing.`,
 };
 
 const ROOM_TYPE_PROMPTS = {
@@ -2827,18 +2839,18 @@ function buildSourcingForRoom(room){
   }[budget] || 1.0;
 
   const presetVendorBoost = {
-    'Mountain': ['RH', 'Article', 'Four Hands', 'Pottery Barn'],
-    'Desert':   ['McGee & Co.', 'Farmhouse Pottery', 'Serena & Lily'],
-    'Coastal':  ['Serena & Lily', 'Pottery Barn', 'West Elm'],
-    'City':     ['CB2', 'Herman Miller', 'Visual Comfort', 'Four Hands'],
+    'Mountain': ['RH', 'Four Hands', 'Article', 'McGee & Co.'],
+    'Desert':   ['McGee & Co.', 'Farmhouse Pottery', 'Article', 'Serena & Lily'],
+    'Coastal':  ['Serena & Lily', 'Pottery Barn', 'West Elm', 'RH'],
+    'City':     ['CB2', 'Visual Comfort', 'Herman Miller', 'Four Hands'],
   };
   const boostedVendors = presetVendorBoost[preset] || [];
 
   const styleContext = {
-    'Mountain': 'warm wood tones, stone textures, and cozy layered textiles',
-    'Desert':   'warm earth tones, organic shapes, and plaster-like surfaces',
-    'Coastal':  'light finishes, airy textures, and ocean-inspired neutrals',
-    'City':     'sleek materials, deeper tones, and sculptural modern forms',
+    'Mountain': 'darkened timber, raw stone, and deep wool textiles — the material language of primal altitude luxury',
+    'Desert':   'sun-bleached plaster, terracotta, and hand-formed ceramics — the sensory palette of arid restraint',
+    'Coastal':  'bleached oak, undyed linen, and natural fiber — the material ease of the California coast at its most elevated',
+    'City':     'charcoal plaster, cognac leather, and blackened steel — the material vocabulary of nocturne urban luxury',
   }[preset] || 'refined, cinematic Revelere aesthetics';
 
   const locationNote  = location ? ` Curated for ${location}.` : '';
@@ -3558,16 +3570,16 @@ function updateBudget(){
 }
 // ═══ M5: HEADLINE TEMPLATES ══════════════════
 const ROOM_HEADLINES = {
-  'Living Room':   { Mountain:'GATHER IN GRANDEUR', Desert:'WHERE THE SUN STAYS', Coastal:'LIGHT MEETS LIFE', City:'ELEVATED EVERY DAY', default:'WHERE STORIES BEGIN' },
-  'Primary Suite': { Mountain:'SLEEP DEEPER HERE', Desert:'DAWN BELONGS TO YOU', Coastal:'WAKE TO THE HORIZON', City:'THE PENTHOUSE FEELING', default:'YOUR PERSONAL SANCTUARY' },
-  'Kitchen':       { Mountain:'GATHER AROUND THE WARMTH', Desert:'ESCAPE WITHOUT LEAVING', Coastal:'FRESH STARTS EVERY MORNING', City:'THE HEART OF THE HOME', default:'WHERE EVERY DAY BEGINS' },
-  'Guest Bedroom': { Mountain:'A ROOM WORTH RETURNING TO', Desert:'DRIFT INTO CALM', Coastal:'SALT AIR AND SOFT LINENS', City:'BOUTIQUE HOTEL MOMENTS', default:'SLEEP LIKE A GUEST' },
-  'Office':        { Mountain:'THINK AMONG THE TREES', Desert:'CLARITY IN EVERY HOUR', Coastal:'WHERE IDEAS BREATHE', City:'PRODUCTIVE AND POLISHED', default:'WORK WORTH SHOWING UP FOR' },
-  'Dining Room':   { Mountain:'LINGER LONGER', Desert:'THE TABLE EVERYONE WANTS', Coastal:'DINNER TASTES BETTER HERE', City:'A RESERVATION WORTH KEEPING', default:'GATHER INTENTIONALLY' },
-  'Outdoor Space': { Mountain:'YOUR PRIVATE WILDERNESS', Desert:'DESERT PLAYGROUND', Coastal:'THE SHORE IS YOURS', City:'SKYLINE LIVING', default:'OUTSIDE IS THE NEW INSIDE' },
-  'Bathroom':      { Mountain:'THE SPA YOU NEVER LEAVE', Desert:'RITUAL. RESTORED.', Coastal:'FRESH EVERY MORNING', City:'HOTEL LUXURY. YOURS DAILY.', default:'YOUR DAILY RITUAL' },
-  'Media Room':    { Mountain:'CINEMATIC COMFORT', Desert:'THE BEST SEAT IN THE HOUSE', Coastal:'EVENINGS WELL SPENT', City:'PRIVATE SCREENING AWAITS', default:'THE SHOW STARTS HERE' },
-  'Entryway':      { Mountain:'ARRIVE. EXHALE.', Desert:'FIRST IMPRESSIONS LINGER', Coastal:'WELCOME HOME', City:'THE ENTRANCE SETS THE TONE', default:'THE FIRST MOMENT' },
+  'Living Room':   { Mountain:'THE WEIGHT OF QUIET', Desert:'WHERE THE AFTERNOON HOLDS', Coastal:'THE BREEZE IS THE DESIGN', City:'THE SKYLINE IS THE SIXTH WALL', default:'WHERE STORIES BEGIN' },
+  'Primary Suite': { Mountain:'DARKNESS EARNS ITS KEEP', Desert:'THE ROOM THAT FACES EAST', Coastal:'SALT. SILK. WIDE WINDOWS.', City:'NO CHECKOUT. NO CLOCK.', default:'YOUR PERSONAL SANCTUARY' },
+  'Kitchen':       { Mountain:'STONE. FIRE. MORNING.', Desert:'SLOW. WARM. DELIBERATE.', Coastal:'THE MORNING BELONGS HERE', City:'PRECISION IN EVERY SQUARE FOOT', default:'WHERE EVERY DAY BEGINS' },
+  'Guest Bedroom': { Mountain:'THE ROOM THAT HOLDS STILL', Desert:'THE LIGHT THAT WAKES YOU FIRST', Coastal:'THE ROOM THEY ASK TO RETURN TO', City:'THE FIVE-STAR STANDARD', default:'SLEEP LIKE A GUEST' },
+  'Office':        { Mountain:'HIGH ALTITUDE. CLEAR HEAD.', Desert:'THE HOUR BELONGS TO THE LIGHT', Coastal:'THE VIEW EARNS ITS WINDOW', City:'THE HOUR THAT EARNS THE VIEW', default:'WORK WORTH SHOWING UP FOR' },
+  'Dining Room':   { Mountain:'THE LONG TABLE STAYS LIT', Desert:'THE TABLE THAT RUNS LATE', Coastal:'LUNCH INTO DINNER. NO REASON TO LEAVE.', City:'THE TABLE WHERE IT HAPPENS', default:'GATHER INTENTIONALLY' },
+  'Outdoor Space': { Mountain:'THE RIDGE WAS THE FIRST DECISION', Desert:'EARTH, SKY, AND OPEN TIME', Coastal:'THE DECK IS THE DESTINATION', City:'THE CITY IS THE VIEW', default:'OUTSIDE IS THE NEW INSIDE' },
+  'Bathroom':      { Mountain:'THE RITUAL OF ALTITUDE', Desert:'THE RITUAL OF THE VEIL', Coastal:'RAIN SHOWER. REAL TOWELS. DONE.', City:'THE ROOM THEY PHOTOGRAPH FIRST', default:'YOUR DAILY RITUAL' },
+  'Media Room':    { Mountain:'DEPTH AND DARK', Desert:'DESERT DARK. THE INTENTIONAL KIND.', Coastal:'SALT AND QUIET', City:'PRIVATE SCREENING. NO NOTES.', default:'THE SHOW STARTS HERE' },
+  'Entryway':      { Mountain:'THE FIRST EXHALE', Desert:'WARMTH BEFORE WORDS', Coastal:'WELCOME BACK TO YOURSELF', City:'THE ENTRANCE COMMANDS SILENCE', default:'THE FIRST MOMENT' },
 };
 
 function getRoomHeadline(room) {
@@ -3736,42 +3748,44 @@ function getDefaultNotes(room) {
   // Avoids every AI-tell phrase. Short, specific, sensory.
   const copy = {
     Mountain: {
-      'Living Room':   { intent: 'Stone, walnut, and wool — materials that carry weight even before you sit down.', experience: 'The kind of room guests photograph at 6am with coffee they didn\'t want to put down.', materials: 'Blackened steel, live-edge wood, boucle in oat and ash. Nothing reclaimed ironically — just honestly old.', lighting: 'Warm filament pendants on dimmers. Firelight does the rest.' },
-      'Primary Suite': { intent: 'Built for the morning you don\'t want to leave.', experience: 'Layered bedding, dark walls, a window that earns its view.', materials: 'Matte linen, aged leather, charcoal plaster. Tactile enough to feel expensive the moment you walk in.', lighting: 'Side table lamps only. Overhead is off by default.' },
-      'Kitchen':       { intent: 'Stone counters, open shelving, a range worth cooking on.', experience: 'Guests make dinner here instead of going out. That\'s the metric.', materials: 'Honed granite, oiled walnut, unlacquered brass. Gets better with use.', lighting: 'Under-cabinet strips, a statement pendant over the island. No recessed grid.' },
-      'Guest Bedroom': { intent: 'Quiet. That\'s the whole design brief.', experience: 'Blackout linen, a reading lamp angled just right, a view of something worth waking up for.', materials: 'Muted wool throw, pine nightstand, cotton percale in stone white.', lighting: 'One warm sconce per side. No overhead.' },
-      'Bathroom':      { intent: 'Spa without saying spa.', experience: 'Walk-in shower, oversized towels, a candle that\'s already lit.', materials: 'Slate tile, matte black fixtures, a wooden bath mat that dries without mildewin.', lighting: 'Warm backlit mirror. Nothing overhead that makes you look tired.' },
-      'Dining Room':   { intent: 'Long table, low pendant, the kind of dinner that goes until midnight.', experience: 'Seats eight. Everyone ends up at the same end.', materials: 'Reclaimed oak table, linen napkins, mismatched vintage glasses that feel found not chosen.', lighting: 'One statement chandelier, candles at 7pm, always.' },
-      'Outdoor Space': { intent: 'The reason they booked.', experience: 'Fire pit, Adirondack chairs angled toward the ridge. No staging, just siting.', materials: 'Weathered teak, flat-stacked stone, native grasses that move in wind.', lighting: 'String lights low, fire pit does everything else.' },
-      default:         { intent: 'Every material chosen for how it reads at dusk.', experience: 'The kind of space guests describe by how it made them feel, not what was in it.', materials: 'Walnut, stone, boucle, aged brass. A palette that ages instead of dates.', lighting: 'Warm, dimmable, layered. The overhead switch stays off.' },
+      'Living Room':   { intent: 'The fireplace is structural — not decorative. Every object in this room was chosen for weight, not charm.', experience: 'Guests don\'t turn the television on. They sit with the fire, the dark wood, the particular silence of altitude. That\'s the metric.', materials: 'Smoked walnut, raw basalt, boucle in undyed oat. Blackened steel. Nothing that wants to be touched — everything that rewards it.', lighting: 'One pendant, warm and directional. Sconces flanking the fireplace. The overhead was never connected.' },
+      'Primary Suite': { intent: 'Dark walls, heavy linen, a bed designed for the hour before sunrise. Architecture first, comfort second — but only barely.', experience: 'Guests set alarms and then ignore them. The room was built for the morning you don\'t want to leave.', materials: 'Charcoal plaster, aged leather headboard, linen in ash and oat. A blanket chest at the foot of the bed with actual weight to it.', lighting: 'Bedside lamps only. Warm enough for reading, dark enough for everything else. The overhead does not exist.' },
+      'Kitchen':       { intent: 'Stone counters, a range worth the gas bill, open shelving that holds things people actually use.', experience: 'Guests make dinner here instead of going out. The kitchen is the reason. That\'s the only metric that matters.', materials: 'Honed dark granite, oiled walnut cabinetry, unlacquered brass hardware. A cleaver on the magnetic strip. A cutting board that\'s been used.', lighting: 'Under-cabinet warmth and one pendant over the island. No recessed grid. Never.' },
+      'Guest Bedroom': { intent: 'Quiet. That\'s the entire brief. A room that makes no demands and creates no interruptions.', experience: 'Blackout linen, a reading lamp angled precisely, and something worth looking at through the window at first light.', materials: 'Undyed wool throw, a pine nightstand without fuss, cotton percale in stone white. Three things. All of them right.', lighting: 'One warm sconce per side. That is the full specification.' },
+      'Bathroom':      { intent: 'The shower is large enough that steam fills it before you notice. That was not an accident.', experience: 'Slate underfoot, matte black fixtures, a wooden bath mat that dries because the ventilation is correct. A candle that was lit before you arrived.', materials: 'Riven slate tile, blackened steel fixtures, a teak mat, oversized cotton towels in undyed white. No chrome. No shine.', lighting: 'Warm mirror light only. Nothing overhead. You should look rested when you leave this room.' },
+      'Dining Room':   { intent: 'A long table, a low pendant, and enough room for everyone to migrate to the same end by 11pm.', experience: 'The kind of dinner that becomes the story of the trip. Seats eight. Nobody remembers sitting far apart.', materials: 'Solid oak table, linen napkins, mismatched glassware that feels discovered rather than purchased. Candles at 7pm. Non-negotiable.', lighting: 'One statement fixture hung low. Candles take over after the first course. The overhead was unnecessary.' },
+      'Outdoor Space': { intent: 'The ridge was here before the property. The design acknowledges this without sentiment.', experience: 'Fire pit, chairs angled toward the view, and the specific silence that only exists above 5,000 feet. No ambient music. Ever.', materials: 'Weathered teak, flat-stacked stone, native grasses that move without being asked. Nothing imported that didn\'t earn it.', lighting: 'The fire. String lights strung low. Darkness is the final material and the most considered one.' },
+      default:         { intent: 'Every material chosen for how it reads at dusk, when the light is finally honest.', experience: 'The kind of space guests describe by how it felt — not what was in it. That distinction was the entire goal.', materials: 'Walnut, stone, boucle, aged brass. A palette that ages instead of dates, deepens instead of fades.', lighting: 'Warm, dimmable, layered. The overhead switch remains off.' },
     },
     Desert: {
-      'Living Room':   { intent: 'The desert got in — and it was the right call.', experience: 'Terracotta, plaster walls, a sofa low enough to feel like the room is breathing.', materials: 'Sand-washed linen, rammed earth tones, hand-thrown ceramic. Nothing machine-perfect.', lighting: 'Late afternoon light through sheer panels. One arched floor lamp for evenings.' },
-      'Primary Suite': { intent: 'Ochre walls, white bed, the window facing east.', experience: 'Guests sleep with the blinds open on purpose. That\'s how you know it\'s working.', materials: 'Rough plaster, matte clay tile, cotton gauze in undyed white.', lighting: 'Sunrise does the work. A small brass lamp for midnight reads.' },
-      'Kitchen':       { intent: 'Built for slow mornings, not efficient ones.', experience: 'Saltillo tile, open shelves, the smell of coffee and something baking.', materials: 'Terracotta tile, unlacquered brass, rough-hewn wood. Looks like it was always here.', lighting: 'Warm pendants over the counter. No cold white anywhere.' },
-      'Guest Bedroom': { intent: 'The guest room that makes people ask to stay an extra night.', experience: 'Desert palette, deep sleep, the kind of room that doesn\'t fight you.', materials: 'Linen in warm sand, woven rattan, a single piece of pottery that earns its shelf.', lighting: 'Bedside lamp only. Warm, forgiving, easy.' },
-      'Bathroom':      { intent: 'Morocco meets the American Southwest. Neither apologizes.', experience: 'Zellige tile, a deep soaking tub, towels that feel heavy on purpose.', materials: 'Hand-painted tile, aged brass fixtures, eucalyptus on the shower head.', lighting: 'Warm mirror lighting. The kind that makes you look like you slept well.' },
-      'Dining Room':   { intent: 'Long dinners on a table that\'s seen a few.', experience: 'Outdoor-indoor flow, candles always on, the kind of meal that becomes a story.', materials: 'Mesquite wood, woven placemats, ceramic dinnerware in terracotta and cream.', lighting: 'Hanging lanterns, candlelight, desert dark outside.' },
-      'Outdoor Space': { intent: 'The pool looks like a painting from inside. On purpose.', experience: 'Swim at 10pm. Watch the stars because there\'s nothing else to look at. That\'s the point.', materials: 'Adobe walls, cacti you don\'t have to water, natural stone that holds the day\'s heat.', lighting: 'Low landscape lighting. Candles at the table. Darkness is the amenity.' },
-      default:         { intent: 'Earth tones that deepen in the afternoon light.', experience: 'Every surface asks to be touched. That\'s not an accident.', materials: 'Plaster, terracotta, linen, aged brass. The palette of everything that survives the desert.', lighting: 'Warm and low. The overhead stays off after 4pm.' },
+      'Living Room':   { intent: 'Plaster walls, a sofa low enough to feel like the room is still settling, afternoon light doing more than any styling ever could.', experience: 'The room slows people down. They take their shoes off earlier here. They pick up objects, turn them, set them down carefully. That behavior was designed.', materials: 'Hand-thrown ceramics, sand-washed linen, rammed earth palette. Nothing machine-perfect. Nothing that rings false against the light.', lighting: 'Sheer natural panels at every window. One arched floor lamp with a warm filament. The sun does the rest until it doesn\'t.' },
+      'Primary Suite': { intent: 'The room faces east. That was the first design decision. Everything else followed from it.', experience: 'Guests sleep with the blinds open on purpose. Sunrise as the alarm. That\'s how you know the design worked.', materials: 'Rough tadelakt plaster in warm white, matte clay tile underfoot, cotton gauze bedding in undyed natural. Heavy, breathable, right.', lighting: 'The sun handles mornings. A small hammered brass lamp for reading after dark. Nothing more is required.' },
+      'Kitchen':       { intent: 'Saltillo tile, open shelving, a coffee setup that actually earns its counter space. Built for slow mornings, not efficient ones.', experience: 'Nobody feels rushed here. The layout doesn\'t permit it. That was not an oversight — it was the brief.', materials: 'Hand-laid terracotta tile, unlacquered brass fixtures, rough-hewn timber shelving with visible grain. The kind of kitchen that looks like it was always there.', lighting: 'Warm pendants over the counter. South-facing window light where the orientation allows. No cold white anywhere.' },
+      'Guest Bedroom': { intent: 'The room that earns an extra night without asking. Desert palette, total quiet, light that understands its role.', experience: 'They extended the reservation because of this room. The design is the reason — not the amenities list.', materials: 'Linen in warm sand, a single hand-thrown piece that earns its shelf, woven rattan where another designer would have reached for chrome.', lighting: 'Bedside only. Warm, forgiving, amber. What exists outside does the rest.' },
+      'Bathroom':      { intent: 'The ritual room. Where the day begins with intention and ends without compromise.', experience: 'Deep soaking tub, zellige tile catching light from unexpected angles, towels with enough weight to mean something.', materials: 'Hand-painted zellige, aged brass fixtures, eucalyptus hung at the shower head, a worn marble threshold. Each object placed once and not moved.', lighting: 'Warm mirror light only. The kind that suggests you slept eight hours even when you didn\'t.' },
+      'Dining Room':   { intent: 'A table made for long evenings — the kind that migrate outside when the air finally cools.', experience: 'The meal becomes the event. Nobody reaches for their phone. The design made presence the path of least resistance.', materials: 'Mesquite wood table, woven placemats, ceramic dinnerware in terracotta and undyed cream. Nothing matched. Everything considered.', lighting: 'Hanging lanterns with warm filament. Candles as the second light source after sundown. Desert dark beyond the table by 8pm.' },
+      'Outdoor Space': { intent: 'The pool reads like a still painting from inside. That composition was not left to chance.', experience: 'Swimming at 10pm under actual stars. The darkness is the amenity. The heat held in the stone underfoot is the comfort.', materials: 'Adobe walls, natural stone that holds the day\'s warmth past midnight, indigenous planting that casts shadows worth having.', lighting: 'Low landscape lighting at the perimeter only. The pool provides its own ambient glow. Everything else: deliberate darkness.' },
+      default:         { intent: 'Earth tones that intensify in the afternoon and release their warmth slowly after dark.', experience: 'Every surface asks to be touched. That intention was present from the first material decision.', materials: 'Plaster, terracotta, undyed linen, aged brass. The complete palette of things that survive heat and improve for it.', lighting: 'Warm and low, always. The overhead switch stays off after 4pm. This is not a rule — it\'s a design conviction.' },
     },
     Coastal: {
-      'Living Room':   { intent: 'Bleached oak, white plaster, the breeze already inside.', experience: 'Guests leave the doors open all day. The room was designed for that.', materials: 'Whitewashed wood, sea-grass rug, linen slipcovers that wash well and look better for it.', lighting: 'Daylight through linen panels. One rattan pendant for evenings.' },
-      'Primary Suite': { intent: 'White cotton, wide windows, the sound of water somewhere.', experience: 'The kind of room where you wake up early not because you have to but because you want to.', materials: 'Cotton percale in salt white, driftwood nightstands, a chunky knit throw for the one cool morning.', lighting: 'Morning light does everything. A bedside lamp for the rest.' },
-      'Kitchen':       { intent: 'The kitchen guests actually use, which means it works.', experience: 'Open layout, good knives, the kind of coffee that happens before shoes.', materials: 'White quartz, unlacquered fixtures, a cutting board that\'s clearly been used before.', lighting: 'Pendants over the island. Natural light off the water if you\'re lucky.' },
-      'Bathroom':      { intent: 'Simple enough to feel like a breath of air.', experience: 'Walk-in rain shower, white towels, something that smells faintly like the sea.', materials: 'Subway tile, chrome fixtures, teak floor mat, eucalyptus always in the corner.', lighting: 'Lit mirror, no color temperature that makes you squint.' },
-      'Dining Room':   { intent: 'Lunch runs into dinner. Nobody minds.', experience: 'White walls, a table that seats more than it looks like it should, candles by 6pm.', materials: 'Whitewashed oak table, linen napkins, glassware that catches the afternoon light.', lighting: 'Natural light until it\'s gone. Then candles and one pendant overhead.' },
-      'Outdoor Space': { intent: 'The deck is where they spend most of the trip.', experience: 'Sun in the morning, shade by afternoon. Outdoor shower. An outdoor shower changes everything.', materials: 'Weathered teak, natural rope, outdoor linen in salt and bone.', lighting: 'String lights low across the railing. Quiet after dark.' },
-      default:         { intent: 'Light and salt and the feeling of being just arrived.', experience: 'Guests always ask what candle is burning. It\'s not a candle — it\'s the design.', materials: 'White oak, linen, rattan, sea glass. Nothing that fights the view.', lighting: 'All natural in the day. Warm and low at night.' },
+      'Living Room':   { intent: 'Bleached oak and undyed linen with the windows open. The first design principle was air.', experience: 'Guests leave the doors open all day. The room was designed for exactly that. The breeze is not incidental — it is structural.', materials: 'Whitewashed timber, sea-grass rug, linen slipcovers in salt white. Everything in this room can be washed. Everything looks better for the use.', lighting: 'Daylight through floor-length linen panels. One rattan pendant for evenings. That is the complete lighting plan.' },
+      'Primary Suite': { intent: 'Cotton percale in salt white, windows floor-to-ceiling, and the particular quiet of being near open water.', experience: 'Guests set sunrise alarms and don\'t regret it. The room earns the early hour. That is the measure of success.', materials: 'Percale in undyed white, driftwood-finish nightstands, a single knit throw for the one cool morning. All of it chosen with the same deliberateness.', lighting: 'Morning light handles everything until it doesn\'t. A warm bedside lamp for the hours after. Nothing between those two.' },
+      'Kitchen':       { intent: 'Open, practical, and beautiful in the way that useful things are — without performing it.', experience: 'They make real breakfast here. The kind that takes time and uses the good knives. The layout invited that behavior.', materials: 'White quartz counters, unlacquered fixtures that will earn a patina, a cutting board that has been cooked on before and looks right for it.', lighting: 'Pendants over the island. Natural light from the east window in the morning. No artificial light before it\'s needed.' },
+      'Guest Bedroom': { intent: 'The room that makes guests feel they arrived somewhere — not merely checked in somewhere.', experience: 'Salt air through the screen window. Soft light from the right angle. The kind of sleep people describe as the best of the trip.', materials: 'Linen in salt white, sea glass on a tray that was found somewhere real, white oak that weathers into something more beautiful than it started.', lighting: 'One warm lamp per side. Morning light through sheer panels. Nothing that competes with either.' },
+      'Bathroom':      { intent: 'Functional and beautiful in equal measure. Not a spa — a room that respects the morning ritual.', experience: 'A rain shower with actual pressure, white cotton towels with real weight, something that smells faintly like proximity to water without announcing it.', materials: 'Subway tile in warm white, chrome that won\'t tarnish, a teak floor mat, eucalyptus in the corner where it permanently lives.', lighting: 'A well-lit mirror that tells the truth without being unkind. No color temperature that makes you squint.' },
+      'Dining Room':   { intent: 'White walls, a table that seats more than it appears to, afternoon light that turns gold precisely when it should.', experience: 'Lunch migrates into dinner. Nobody tracks the time. The design made that the natural outcome of being in the room.', materials: 'Whitewashed oak, linen napkins laundered soft, glassware that catches the slant of late afternoon without being decorative about it.', lighting: 'Natural light until it\'s gone. Then candles. Then one pendant over the table. In that exact order.' },
+      'Outdoor Space': { intent: 'The deck is designed to be where they spend most of the trip. That required the same attention as any interior room.', experience: 'Sun in the morning. Shade by early afternoon. An outdoor shower that changes the entire experience. They all say it — the outdoor shower.', materials: 'Weathered teak that silvers over time, outdoor linen in salt and bone, natural rope where another designer would have used powder-coated metal.', lighting: 'String lights strung low across the railing. Quiet after dark. The water provides the rest.' },
+      default:         { intent: 'Light, salt, and the immediate sensation of having arrived somewhere worth staying.', experience: 'Guests ask what\'s burning. It\'s not a candle. It\'s the design doing exactly what it was built to do.', materials: 'White oak, undyed linen, rattan, sea glass. Nothing that competes with the view, or wants to.', lighting: 'All natural until the sun finishes. Warm and low after that. No negotiation.' },
     },
     City: {
-      'Living Room':   { intent: 'Dark walls, a sofa worth sinking into, the skyline as wallpaper.', experience: 'The kind of room that makes people cancel their dinner reservation.', materials: 'Charcoal plaster, cognac leather, blackened steel. A room that means business without trying.', lighting: 'Sculptural floor lamp, city lights do the rest. Overhead never.' },
-      'Primary Suite': { intent: 'Boutique hotel energy. No checkout time.', experience: 'Blackout curtains, a bed that takes real effort to leave, the kind of silence a city building shouldn\'t have.', materials: 'Deep linen in slate and charcoal, leather headboard, chrome and matte black fixtures.', lighting: 'Bedside lamps only. Warm enough to read, dark enough to sleep.' },
-      'Kitchen':       { intent: 'A kitchen that earns its place in a small footprint.', experience: 'The layout is tight and perfect. Everything within reach. Nothing wasted.', materials: 'Honed black granite, stainless, a single open shelf that earns its display.', lighting: 'Under-cabinet, statement pendant. Professional and residential at once.' },
-      'Bathroom':      { intent: 'The bathroom you take a photo of before using it.', experience: 'Walk-in shower, rainfall head, a mirror lit like a magazine shoot.', materials: 'Large-format dark tile, matte black fixtures, marble vanity that\'s seen a few good mornings.', lighting: 'Backlit mirror, no ceiling light, warm enough to feel like a hotel.' },
-      'Dining Room':   { intent: 'The table where deals happen and anniversaries get celebrated.', experience: 'Low pendant, a view worth sitting across from, candles because there\'s no other option.', materials: 'Walnut table, leather dining chairs, linen napkins that feel like an event.', lighting: 'One statement pendant. Everything else in the room gets darker so it can shine.' },
-      'Outdoor Space': { intent: 'The terrace is the reason this address works.', experience: 'The city is the view. You designed around it, not despite it.', materials: 'Concrete pavers, outdoor sectional in charcoal, fire feature that anchors the space.', lighting: 'Low landscape lighting, fire feature, city glow. Nothing competing.' },
-      default:         { intent: 'Dark, precise, no apologies.', experience: 'Guests extend their stay. The room is better than the reason they came.', materials: 'Charcoal, leather, bronze, steel. The palette of a city that doesn\'t sleep.', lighting: 'Warm and directional. The kind of light that flatters everything.' },
+      'Living Room':   { intent: 'Deep charcoal walls, a sofa you sink into and reconsider leaving, and the skyline doing what no artwork ever could from every window.', experience: 'Guests cancel dinner reservations. The view is better from here. The design made that the easy choice.', materials: 'Charcoal plaster, cognac leather, blackened steel. A room that holds its aesthetic at any hour without making concessions.', lighting: 'One sculptural floor lamp. City light through floor-to-ceiling glass. The overhead was removed as a design decision, not an oversight.' },
+      'Primary Suite': { intent: 'No checkout time. No clock visible from the bed. The room operates on its own schedule and invites you to do the same.', experience: 'Blackout when you need it, city glow when you don\'t. The silence is an engineered feature — it took more work than anything visible.', materials: 'Deep slate linen, leather headboard with age and intention built into the finish, chrome and matte black fixtures that know exactly what they are.', lighting: 'Bedside lamps, warm and low. Enough to read by. Dark enough to disappear into.' },
+      'Kitchen':       { intent: 'A kitchen that earns every square foot in a city footprint. Precise, purposeful, and more beautiful for the constraint.', experience: 'The layout is tight and exact. Two people can cook in it without negotiating. That required real thought — and it shows without saying so.', materials: 'Honed black granite, stainless that doesn\'t announce itself, one open shelf styled with objects that passed a harder edit than most rooms receive.', lighting: 'Under-cabinet strips for function. One pendant that doubles as a statement. Professional ambition, residential restraint.' },
+      'Guest Bedroom': { intent: 'Five-star standard without the turndown service. The room should need no explanation and offer no apology.', experience: 'Guests leave reviews before they check out. The bed, the light control, the silence — each one was specified, not assumed.', materials: 'Slate linen, chrome fixtures that hit their mark, a walnut nightstand with one good lamp. Edited to the point where nothing can be removed.', lighting: 'Full blackout when drawn. Controlled ambient when not. One lamp. That is all this room requires.' },
+      'Bathroom':      { intent: 'The room guests photograph before they use it. That reaction was designed toward — not hoped for.', experience: 'Walk-in shower, rainfall head calibrated to pressure, a mirror lit like something from a production shoot, a vanity that rewards the morning ritual.', materials: 'Large-format dark tile, matte black fixtures, a marble vanity that has seen a few good mornings and conceals none of them.', lighting: 'Backlit mirror only. No ceiling fixture. Warm enough to feel like a hotel and nothing like a fluorescent.' },
+      'Dining Room':   { intent: 'The table where consequential things happen — deals, declarations, anniversaries that don\'t fade. The room was designed to hold that weight.', experience: 'Low pendant, city view, candlelight the moment the first plates arrive. Nobody needs to set the mood — it already exists before anyone sits down.', materials: 'Walnut table with visible grain and real mass, leather chairs with enough presence to take seriously, linen napkins that make the meal feel like an occasion.', lighting: 'One oversized pendant hung deliberately low over the table. Everything else in the room recedes. That was the entire lighting brief.' },
+      'Outdoor Space': { intent: 'The city is the material. The terrace was designed around it — not despite it, not competing with it.', experience: 'You sit out here at midnight and understand precisely why the address was worth it. That understanding was designed, not stumbled into.', materials: 'Concrete pavers that hold their color, a charcoal outdoor sectional with actual structural weight, a fire feature that anchors the space against the skyline.', lighting: 'Low landscape lighting at the perimeter. The fire. The city itself. Three sources. All of them perfect and none of them accidental.' },
+      default:         { intent: 'Dark, precise, and without apology. Every decision was made toward a specific atmospheric outcome.', experience: 'Guests extend their stay. The room is better than the reason they came. That reversal was the goal from the beginning.', materials: 'Charcoal, leather, bronze, blackened steel. The material language of a city that operates on its own terms and keeps its own hours.', lighting: 'Warm and directional. The kind of light that flatters the room and everyone who enters it.' },
     },
   };
 
@@ -4504,56 +4518,56 @@ function generateBook() {
 // ── Minimal copy per style × room type ───────
 const MINIMAL_NOTES = {
   Mountain: {
-    'Living Room':   { line: 'Stone and walnut, built for the kind of cold that makes you stay inside.', materials: 'Walnut · Boucle · Blackened Steel · Wool' },
-    'Primary Suite': { line: 'Dark walls. White linen. The view earns its window.', materials: 'Linen · Aged Leather · Charcoal Plaster' },
-    'Kitchen':       { line: 'A range you actually cook on. Stone you don\'t wipe after every use.', materials: 'Honed Granite · Oiled Walnut · Unlacquered Brass' },
-    'Guest Bedroom': { line: 'Quiet enough to hear the snow.', materials: 'Wool Throw · Pine · Cotton Percale' },
-    'Bathroom':      { line: 'Steam. Slate. The morning belongs to you.', materials: 'Slate Tile · Matte Black · Teak' },
-    'Dining Room':   { line: 'Long table. Low pendant. Dinner that goes until midnight.', materials: 'Reclaimed Oak · Linen · Cast Iron' },
-    'Outdoor Space': { line: 'Fire pit, ridge view, no agenda.', materials: 'Weathered Teak · Flat-Stacked Stone · Native Grass' },
-    'Office':        { line: 'Good light. No interruptions. A desk worth sitting at.', materials: 'Live Edge Walnut · Leather · Aged Brass' },
-    'Media Room':    { line: 'The kind of dark you forget exists outside.', materials: 'Charcoal Wool · Blackout Linen · Walnut' },
-    'Entryway':      { line: 'The first exhale happens here.', materials: 'Stone Floor · Reclaimed Wood Bench · Matte Black' },
-    default:         { line: 'Every material chosen for how it reads at dusk.', materials: 'Walnut · Stone · Boucle · Aged Brass' },
+    'Living Room':   { line: 'Smoked walnut, raw stone, and the particular silence of altitude.', materials: 'Smoked Walnut · Raw Basalt · Blackened Steel · Undyed Boucle' },
+    'Primary Suite': { line: 'Dark walls, heavy linen, a bed designed for the hour before dawn.', materials: 'Charcoal Plaster · Aged Leather · Linen in Ash' },
+    'Kitchen':       { line: 'Stone that improves with use. A range worth the gas bill.', materials: 'Honed Dark Granite · Oiled Walnut · Unlacquered Brass' },
+    'Guest Bedroom': { line: 'Quiet enough to hear the difference.', materials: 'Undyed Wool Throw · Pine · Cotton Percale in Stone White' },
+    'Bathroom':      { line: 'Slate. Steam. The morning belongs to you.', materials: 'Riven Slate · Matte Black Fixtures · Teak' },
+    'Dining Room':   { line: 'Long table, low pendant, dinner that runs until the candles decide otherwise.', materials: 'Solid Oak · Undyed Linen · Cast Iron' },
+    'Outdoor Space': { line: 'The ridge was the first design decision. Everything followed.', materials: 'Weathered Teak · Flat-Stacked Stone · Native Grasses' },
+    'Office':        { line: 'High altitude. Clear head. A desk that earns its view.', materials: 'Live-Edge Walnut · Aged Leather · Blackened Steel' },
+    'Media Room':    { line: 'The dark in here is a different quality than outside.', materials: 'Charcoal Wool · Blackout Linen · Walnut Paneling' },
+    'Entryway':      { line: 'The weight of the threshold was intentional.', materials: 'Riven Stone Floor · Reclaimed Timber Bench · Matte Black' },
+    default:         { line: 'Every material chosen for how it reads at dusk.', materials: 'Smoked Walnut · Basalt · Undyed Boucle · Aged Brass' },
   },
   Desert: {
-    'Living Room':   { line: 'Terracotta, plaster walls, a sofa low enough to feel like the room is breathing.', materials: 'Sand-Washed Linen · Rammed Earth · Hand-Thrown Ceramic' },
-    'Primary Suite': { line: 'Ochre walls, white bed, the window facing east.', materials: 'Rough Plaster · Matte Clay Tile · Cotton Gauze' },
-    'Kitchen':       { line: 'Built for slow mornings. Saltillo tile. The smell of coffee.', materials: 'Terracotta Tile · Unlacquered Brass · Rough-Hewn Wood' },
-    'Guest Bedroom': { line: 'Desert palette, deep sleep, the room that gets the early light.', materials: 'Linen in Warm Sand · Woven Rattan · Natural Pottery' },
-    'Bathroom':      { line: 'Morocco meets the Southwest. Neither apologizes.', materials: 'Hand-Painted Zellige · Aged Brass · Eucalyptus' },
-    'Dining Room':   { line: 'Long dinners on a table that\'s seen a few.', materials: 'Mesquite Wood · Woven Placemats · Terracotta Ceramics' },
-    'Outdoor Space': { line: 'The pool looks like a painting from inside. On purpose.', materials: 'Adobe · Natural Stone · Palo Verde' },
-    'Office':        { line: 'Sun from the south window, coffee cooling, nowhere to be.', materials: 'Plaster · Terracotta · Woven Leather Chair' },
-    'Media Room':    { line: 'Desert dark. The good kind.', materials: 'Deep Linen · Clay Wall · Sisal' },
-    'Entryway':      { line: 'First impressions in earth and shadow.', materials: 'Saltillo Tile · Plastered Walls · Aged Wood' },
-    default:         { line: 'Earth tones that deepen in the afternoon light.', materials: 'Plaster · Terracotta · Linen · Aged Brass' },
+    'Living Room':   { line: 'Plaster walls and afternoon light doing more than any styling could.', materials: 'Tadelakt Plaster · Sand-Washed Linen · Hand-Thrown Ceramic' },
+    'Primary Suite': { line: 'The room faces east. That was the first decision.', materials: 'Rough Plaster · Matte Clay Tile · Undyed Cotton Gauze' },
+    'Kitchen':       { line: 'Saltillo tile, slow mornings, coffee before function.', materials: 'Hand-Laid Terracotta · Unlacquered Brass · Rough-Hewn Timber' },
+    'Guest Bedroom': { line: 'Desert palette. The light that wakes you first.', materials: 'Linen in Warm Sand · Hand-Thrown Pottery · Woven Rattan' },
+    'Bathroom':      { line: 'The ritual room. Where the veil is earned.', materials: 'Hand-Painted Zellige · Aged Brass · Eucalyptus' },
+    'Dining Room':   { line: 'Long evenings at a table that doesn\'t rush.', materials: 'Mesquite Wood · Woven Placemats · Terracotta Ceramics' },
+    'Outdoor Space': { line: 'The pool reads like a painting from inside. That composition was not accidental.', materials: 'Adobe Wall · Natural Stone · Indigenous Planting' },
+    'Office':        { line: 'One south window, one slow hour, one clear thought.', materials: 'Tadelakt Plaster · Terracotta · Woven Leather' },
+    'Media Room':    { line: 'Desert dark. The intentional kind.', materials: 'Deep Sand Linen · Clay Wall · Hand-Loomed Sisal' },
+    'Entryway':      { line: 'Warmth before anything is said.', materials: 'Saltillo Tile · Limewash Wall · Aged Timber' },
+    default:         { line: 'Earth tones that deepen when the afternoon holds still.', materials: 'Tadelakt · Terracotta · Undyed Linen · Aged Brass' },
   },
   Coastal: {
-    'Living Room':   { line: 'Bleached oak, white plaster, the breeze already inside.', materials: 'Whitewashed Wood · Sea-Grass · Undyed Linen' },
-    'Primary Suite': { line: 'White cotton, wide windows, the sound of water somewhere.', materials: 'Cotton Percale · Driftwood · Chunky Knit' },
-    'Kitchen':       { line: 'Open layout, good knives, coffee before shoes.', materials: 'White Quartz · Whitewashed Tile · Rattan Pendant' },
-    'Guest Bedroom': { line: 'Salt air and soft light. The room guests ask to return to.', materials: 'Linen in Salt White · Sea Glass · White Oak' },
-    'Bathroom':      { line: 'Simple enough to feel like a breath of fresh air.', materials: 'Subway Tile · Chrome · Teak Mat · Eucalyptus' },
-    'Dining Room':   { line: 'Lunch runs into dinner. Nobody minds.', materials: 'Whitewashed Oak · Linen Napkins · Sea-Glass Glassware' },
-    'Outdoor Space': { line: 'The deck is where they spend most of the trip.', materials: 'Weathered Teak · Outdoor Linen · Natural Rope' },
-    'Office':        { line: 'The view does half the work.', materials: 'White Oak · Linen · Woven Seagrass' },
-    'Media Room':    { line: 'The evening room. Salt and quiet.', materials: 'Soft Linen · Whitewashed Wood · Warm Wool' },
-    'Entryway':      { line: 'Welcome home. You can already hear the water.', materials: 'White Oak Plank · Rattan · Sea Glass Bowl' },
-    default:         { line: 'Light and salt and the feeling of just arrived.', materials: 'White Oak · Linen · Rattan · Sea Glass' },
+    'Living Room':   { line: 'Bleached oak and open windows. The breeze is the design.', materials: 'Whitewashed Timber · Sea-Grass · Undyed Linen' },
+    'Primary Suite': { line: 'Salt white cotton, wide windows, the sound of water arriving.', materials: 'Cotton Percale · Driftwood Oak · Knit Throw in Bone' },
+    'Kitchen':       { line: 'Open, practical, luminous. Coffee before shoes.', materials: 'White Quartz · Whitewashed Tile · Unlacquered Brass' },
+    'Guest Bedroom': { line: 'Salt air through the screen. The room that earns the return visit.', materials: 'Linen in Salt White · Sea Glass · Bleached White Oak' },
+    'Bathroom':      { line: 'Rain shower. Real towels. Something faintly like the sea.', materials: 'Warm White Subway Tile · Chrome · Teak Mat · Eucalyptus' },
+    'Dining Room':   { line: 'Lunch into dinner. The light made it easy to stay.', materials: 'Whitewashed Oak · Linen Napkins · Sea-Glass Glassware' },
+    'Outdoor Space': { line: 'The deck was designed to be the destination. It works.', materials: 'Silvered Teak · Outdoor Linen in Salt & Bone · Natural Rope' },
+    'Office':        { line: 'The view earns its window. The work follows.', materials: 'Bleached White Oak · Undyed Linen · Woven Sea-Grass' },
+    'Media Room':    { line: 'Salt and quiet. The evening room.', materials: 'Undyed Linen · Whitewashed Wood · Warm-Weight Wool' },
+    'Entryway':      { line: 'The first breath of salt air. You\'re already somewhere.', materials: 'White Oak Plank · Rattan · A Bowl of Something Found' },
+    default:         { line: 'Light, salt, and the sensation of just arrived.', materials: 'Bleached White Oak · Undyed Linen · Rattan · Sea Glass' },
   },
   City: {
-    'Living Room':   { line: 'Dark walls, a sofa worth sinking into, the skyline as wallpaper.', materials: 'Charcoal Plaster · Cognac Leather · Blackened Steel' },
-    'Primary Suite': { line: 'Boutique hotel energy. No checkout time.', materials: 'Deep Linen · Leather Headboard · Chrome & Matte Black' },
-    'Kitchen':       { line: 'Tight and perfect. Everything within reach. Nothing wasted.', materials: 'Honed Black Granite · Stainless · Open Shelving' },
-    'Guest Bedroom': { line: 'The guest room that earns five stars every time.', materials: 'Slate Linen · Chrome Fixtures · Walnut Nightstand' },
-    'Bathroom':      { line: 'The bathroom you photograph before using it.', materials: 'Large-Format Dark Tile · Matte Black · Marble Vanity' },
-    'Dining Room':   { line: 'The table where deals happen and anniversaries get celebrated.', materials: 'Walnut · Leather Chairs · Linen Napkins' },
-    'Outdoor Space': { line: 'The city is the view. You designed around it.', materials: 'Concrete Pavers · Charcoal Sectional · Fire Feature' },
-    'Office':        { line: 'Every hour here feels earned.', materials: 'Smoked Glass · Walnut · Leather · Bronze' },
-    'Media Room':    { line: 'Private screening. No notes.', materials: 'Velvet · Blackout · Walnut Wall Panel' },
-    'Entryway':      { line: 'The entrance sets the tone. This one means business.', materials: 'Marble · Matte Black · Walnut Console' },
-    default:         { line: 'Dark, precise, no apologies.', materials: 'Charcoal · Leather · Bronze · Steel' },
+    'Living Room':   { line: 'Charcoal walls and the skyline doing what no artwork ever could.', materials: 'Charcoal Plaster · Cognac Leather · Blackened Steel' },
+    'Primary Suite': { line: 'No checkout time. No clock visible from the bed.', materials: 'Deep Slate Linen · Leather Headboard · Chrome & Matte Black' },
+    'Kitchen':       { line: 'Every square foot earning its position. Precise and more beautiful for it.', materials: 'Honed Black Granite · Stainless · One Earned Open Shelf' },
+    'Guest Bedroom': { line: 'Five-star standard. No explanation required.', materials: 'Slate Linen · Chrome Fixtures · Walnut Nightstand' },
+    'Bathroom':      { line: 'The room they photograph before using. By design.', materials: 'Large-Format Dark Tile · Matte Black · Marble Vanity' },
+    'Dining Room':   { line: 'The table where consequential things happen.', materials: 'Dark Walnut · Leather Dining Chairs · Linen Napkins' },
+    'Outdoor Space': { line: 'The city is the material. Designed around it.', materials: 'Concrete Pavers · Charcoal Sectional · Fire Feature' },
+    'Office':        { line: 'Every hour here feels like it counted.', materials: 'Smoked Glass · Dark Walnut · Aged Leather · Bronze' },
+    'Media Room':    { line: 'Private screening. No notes. No interruptions.', materials: 'Charcoal Velvet · Blackout · Walnut Wall Paneling' },
+    'Entryway':      { line: 'The entrance commands silence. The design delivers it.', materials: 'Dark Marble · Matte Black · Walnut Console' },
+    default:         { line: 'Dark, precise, and without apology.', materials: 'Charcoal · Aged Leather · Bronze · Blackened Steel' },
   },
 };
 
