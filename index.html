@@ -1186,14 +1186,23 @@ async function handleFiles(files){
     await new Promise(resolve=>{
       const r=new FileReader();
       r.onload=async e=>{
-        const rawSrc=e.target.result;
-        const type=await detectRoomType(rawSrc,file.name);
-        const cnt=S.rooms.filter(r=>r.type===type).length;
-        const id=Date.now()+Math.random();
-        const src=await uploadToBlob(rawSrc,`${id}-original.jpg`);
-        S.rooms.push({id,name:cnt?type+' '+(cnt+1):type,type,src,empty:null,emptyCanvas:null,after:null,brief:null,aiLabeled:true});
-        renderRooms();updateDashboard();resolve();
+        try {
+          const rawSrc=e.target.result;
+          const type=await detectRoomType(rawSrc,file.name);
+          const cnt=S.rooms.filter(r=>r.type===type).length;
+          const id=Date.now()+Math.random();
+          const src=await uploadToBlob(rawSrc,`${id}-original.jpg`);
+          S.rooms.push({id,name:cnt?type+' '+(cnt+1):type,type,src,empty:null,emptyCanvas:null,after:null,brief:null,aiLabeled:true,
+            views:[{src,empty:null,emptyCanvas:null,after:null}]});
+          renderRooms();updateDashboard();
+        } catch(err) {
+          console.error('Room upload error:', err);
+          showToast('Upload error: ' + (err.message||'unknown'), true);
+        } finally {
+          resolve(); // always resolve so the loop continues
+        }
       };
+      r.onerror = () => { showToast('Failed to read file: ' + file.name, true); resolve(); };
       r.readAsDataURL(file);
     });
   }
@@ -1505,35 +1514,63 @@ async function callOpenAIInpaint(imageDataUrl){
   throw new Error('Unexpected response format from OpenAI');
 }
 
+// Fetch any external URL (Vercel Blob CDN, etc.) and return a data URL.
+// Must be called before any canvas operation to avoid CORS taint.
+async function ensureDataUrl(src) {
+  if (!src || src.startsWith('data:') || src.startsWith('blob:')) return src;
+  try {
+    const r = await fetch(src);
+    if (!r.ok) throw new Error('fetch ' + r.status);
+    const blob = await r.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch(e) {
+    console.warn('ensureDataUrl failed, using src as-is:', e.message);
+    return src;
+  }
+}
+
 // Resize image to exact pixel dimensions (for OpenAI which requires 1024x1024)
 function resizeToExact(dataUrl, targetW, targetH){
-  return new Promise(resolve=>{
-    const img=new Image();
-    img.onload=()=>{
-      const c=document.createElement('canvas');
-      c.width=targetW; c.height=targetH;
-      const ctx=c.getContext('2d');
-      // Cover-fit: crop to fill the square without stretching
-      const scale=Math.max(targetW/img.width, targetH/img.height);
-      const sw=img.width*scale, sh=img.height*scale;
-      const ox=(targetW-sw)/2, oy=(targetH-sh)/2;
-      ctx.drawImage(img, ox, oy, sw, sh);
-      resolve(c.toDataURL('image/jpeg', 0.92));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = targetW; c.height = targetH;
+        const ctx = c.getContext('2d');
+        // Cover-fit: crop to fill the square without stretching
+        const scale = Math.max(targetW / img.width, targetH / img.height);
+        const sw = img.width * scale, sh = img.height * scale;
+        const ox = (targetW - sw) / 2, oy = (targetH - sh) / 2;
+        ctx.drawImage(img, ox, oy, sw, sh);
+        resolve(c.toDataURL('image/jpeg', 0.92));
+      } catch(e) { reject(e); }
     };
-    img.src=dataUrl;
+    img.onerror = () => reject(new Error('Failed to load image for resize'));
+    img.src = dataUrl;
   });
 }
 
 function convertToPng(dataUrl){
-  return new Promise(resolve=>{
-    const img=new Image();
-    img.onload=()=>{
-      const c=document.createElement('canvas');
-      c.width=img.width; c.height=img.height;
-      c.getContext('2d').drawImage(img,0,0);
-      resolve(c.toDataURL('image/png'));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0);
+        resolve(c.toDataURL('image/png'));
+      } catch(e) { reject(e); }
     };
-    img.src=dataUrl;
+    img.onerror = () => reject(new Error('Failed to load image for PNG conversion'));
+    img.src = dataUrl;
   });
 }
 
@@ -2053,7 +2090,9 @@ async function generateAfter() {
 }
 
 async function callOpenAIImg2Img(imageDataUrl, prompt){
-  const resized=await resizeToExact(imageDataUrl, 1024, 1024);
+  // Convert CDN/blob URLs to data URLs before canvas operations (avoids CORS taint)
+  const safeUrl = await ensureDataUrl(imageDataUrl);
+  const resized=await resizeToExact(safeUrl, 1024, 1024);
   const pngDataUrl=await convertToPng(resized);
   const imgBlob=await dataUrlToBlob(pngDataUrl, 'image/png');
 
@@ -2093,9 +2132,12 @@ async function callOpenAIImg2Img(imageDataUrl, prompt){
 
 // Canvas-based after style effect — applies a color grade per preset
 async function applyAfterEffect(imgSrc, preset){
+  const safeUrl = await ensureDataUrl(imgSrc);
   return new Promise(resolve=>{
     const img=new Image();
+    img.crossOrigin='anonymous';
     img.onload=()=>{
+      try {
       const c=document.createElement('canvas');
       c.width=img.naturalWidth||800;c.height=img.naturalHeight||600;
       const ctx=c.getContext('2d');
@@ -2121,9 +2163,10 @@ async function applyAfterEffect(imgSrc, preset){
       ctx.fillStyle='rgba(166,124,82,0.06)';
       ctx.fillRect(0,0,c.width,c.height);
       resolve(c.toDataURL('image/jpeg',0.92));
+      } catch(e) { resolve(safeUrl); } // canvas taint fallback
     };
-    img.onerror=()=>resolve(imgSrc);
-    img.src=imgSrc;
+    img.onerror=()=>resolve(safeUrl);
+    img.src=safeUrl;
   });
 }
 
