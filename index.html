@@ -111,14 +111,22 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 
 /* ROOMS */
 .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 13px; margin-top: 20px; }
-.room-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: all 0.2s; }
+.room-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s, opacity 0.15s; cursor: grab; }
 .room-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+.room-card.drag-dragging { opacity: 0.35; cursor: grabbing; }
+.room-card.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(166,124,82,0.25); }
 .room-thumb { height: 135px; background: var(--ivory-dark); position: relative; overflow: hidden; }
 .room-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .room-badge { position: absolute; top: 7px; left: 7px; background: rgba(27,27,27,0.7); color: var(--ivory); font-size: 10px; letter-spacing: 0.07em; padding: 2px 7px; border-radius: 3px; backdrop-filter: blur(4px); text-transform: uppercase; }
 .room-ai-badge { position: absolute; top: 7px; right: 7px; background: rgba(166,124,82,0.85); color: var(--ivory); font-size: 9px; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 3px; backdrop-filter: blur(4px); }
 .room-remove { position: absolute; bottom: 6px; right: 6px; width: 24px; height: 24px; background: rgba(27,27,27,0.6); border: none; border-radius: 50%; color: white; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; }
 .room-card:hover .room-remove { opacity: 1; }
+.room-reorder { position: absolute; bottom: 6px; left: 6px; display: flex; gap: 3px; opacity: 0; transition: opacity 0.15s; }
+.room-card:hover .room-reorder { opacity: 1; }
+.room-reorder button { width: 22px; height: 22px; background: rgba(27,27,27,0.6); border: none; border-radius: 4px; color: white; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.room-reorder button:hover { background: rgba(166,124,82,0.85); }
+.room-drag-handle { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.7); font-size: 14px; letter-spacing: 1px; opacity: 0; transition: opacity 0.15s; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.room-card:hover .room-drag-handle { opacity: 1; }
 .room-info { padding: 10px 12px 12px; }
 .room-name-input { width: 100%; border: none; font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--charcoal); background: transparent; outline: none; padding: 0; }
 .room-name-input:focus { border-bottom: 1px solid var(--accent); }
@@ -1217,11 +1225,20 @@ function renderRooms(){
   sec.style.display='block';
   document.getElementById('room-count').textContent=`— ${S.rooms.length} room${S.rooms.length!==1?'s':''}`;
   grid.innerHTML=S.rooms.map((room,i)=>`
-    <div class="room-card">
+    <div class="room-card" draggable="true" data-room-id="${room.id}"
+      ondragstart="roomDragStart(event,'${room.id}')"
+      ondragover="roomDragOver(event,'${room.id}')"
+      ondrop="roomDrop(event,'${room.id}')"
+      ondragend="roomDragEnd(event)">
       <div class="room-thumb">
         <img src="${room.src}" alt="${room.name}" loading="lazy">
+        <div class="room-drag-handle">⠿</div>
         <div class="room-badge">Room ${i+1}</div>
         ${room.aiLabeled?'<div class="room-ai-badge">AI labeled</div>':''}
+        <div class="room-reorder">
+          ${i>0?`<button onclick="event.stopPropagation();moveRoom('${room.id}',-1)" title="Move up">↑</button>`:''}
+          ${i<S.rooms.length-1?`<button onclick="event.stopPropagation();moveRoom('${room.id}',1)" title="Move down">↓</button>`:''}
+        </div>
         <button class="room-remove" onclick="removeRoom('${room.id}')">✕</button>
       </div>
       <div class="room-info">
@@ -1232,6 +1249,65 @@ function renderRooms(){
         </select>
       </div>
     </div>`).join('');
+}
+
+// ── Room reorder ──────────────────────────────
+let _dragRoomId = null;
+
+function moveRoom(id, dir) {
+  const idx = S.rooms.findIndex(r => String(r.id) === String(id));
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= S.rooms.length) return;
+  const tmp = S.rooms[idx];
+  S.rooms[idx] = S.rooms[newIdx];
+  S.rooms[newIdx] = tmp;
+  if (S.activeRoom === idx) S.activeRoom = newIdx;
+  else if (S.activeRoom === newIdx) S.activeRoom = idx;
+  renderRooms();
+  updateDashboard();
+  scheduleSave();
+}
+
+function roomDragStart(e, id) {
+  _dragRoomId = String(id);
+  e.dataTransfer.effectAllowed = 'move';
+  // Slight delay so the card renders its dragging style after the drag image is captured
+  setTimeout(() => {
+    const el = document.querySelector(`.room-card[data-room-id="${id}"]`);
+    if (el) el.classList.add('drag-dragging');
+  }, 0);
+}
+
+function roomDragOver(e, id) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (String(id) === _dragRoomId) return;
+  document.querySelectorAll('.room-card').forEach(c => c.classList.remove('drag-over'));
+  const el = document.querySelector(`.room-card[data-room-id="${id}"]`);
+  if (el) el.classList.add('drag-over');
+}
+
+function roomDrop(e, targetId) {
+  e.preventDefault();
+  document.querySelectorAll('.room-card').forEach(c => { c.classList.remove('drag-over'); c.classList.remove('drag-dragging'); });
+  if (!_dragRoomId || String(targetId) === _dragRoomId) { _dragRoomId = null; return; }
+  const fromIdx = S.rooms.findIndex(r => String(r.id) === _dragRoomId);
+  const toIdx   = S.rooms.findIndex(r => String(r.id) === String(targetId));
+  if (fromIdx < 0 || toIdx < 0) { _dragRoomId = null; return; }
+  const [moved] = S.rooms.splice(fromIdx, 1);
+  S.rooms.splice(toIdx, 0, moved);
+  if (S.activeRoom === fromIdx) S.activeRoom = toIdx;
+  _dragRoomId = null;
+  renderRooms();
+  updateDashboard();
+  scheduleSave();
+  showToast('Room order updated');
+}
+
+function roomDragEnd(e) {
+  document.querySelectorAll('.room-card').forEach(c => { c.classList.remove('drag-over'); c.classList.remove('drag-dragging'); });
+  _dragRoomId = null;
 }
 
 function setRoom(id,k,v){const r=S.rooms.find(r=>r.id==id);if(r){r[k]=v;scheduleSave();}}
