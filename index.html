@@ -4742,8 +4742,9 @@ ${bookCss.join('\n')}
       throw new Error(err.error || `HTTP ${r.status}`);
     }
     const { url } = await r.json();
-    // Build absolute URL so the copy includes the full domain
-    const absoluteUrl = url.startsWith('http') ? url : (location.origin + url);
+    // Build absolute URL — prefer branded domain, fall back to current origin
+    const SHARE_DOMAIN = 'https://design.revelere.com';
+    const absoluteUrl = url.startsWith('http') ? url : (SHARE_DOMAIN + url);
     showShareModal(absoluteUrl);
 
   } catch(e) {
