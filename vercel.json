@@ -6,6 +6,6 @@
     "api/anthropic.js":       { "maxDuration": 60  },
     "api/blob-upload.js":     { "maxDuration": 60  },
     "api/manifest.js":        { "maxDuration": 30  },
-    "api/share.js":           { "maxDuration": 60  }
+    "api/share.js":           { "maxDuration": 120 }
   }
 }

@@ -4742,7 +4742,9 @@ ${bookCss.join('\n')}
       throw new Error(err.error || `HTTP ${r.status}`);
     }
     const { url } = await r.json();
-    showShareModal(url);
+    // Build absolute URL so the copy includes the full domain
+    const absoluteUrl = url.startsWith('http') ? url : (location.origin + url);
+    showShareModal(absoluteUrl);
 
   } catch(e) {
     console.error('Share error:', e);
