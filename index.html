@@ -4531,12 +4531,29 @@ function exportBookPDF() {
     .book-page, .lb-page { width: 720px; margin: 0; }
     ${bookCss.join('\n')}
 
+    @page { margin: 0; size: auto; }
     @media print {
-      body { background: none; padding: 0; }
+      html { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #1c1814 !important; padding: 0 !important; margin: 0 !important; }
       #fp-nav { display: none !important; }
-      .fp-wrap { display: block !important; width: 100%; page-break-after: always; }
+      #flipbook { width: 100% !important; }
+      .fp-wrap {
+        display: block !important;
+        width: 100% !important;
+        height: 100vh !important;
+        page-break-after: always;
+        break-after: page;
+        overflow: hidden;
+        position: relative;
+      }
+      .fp-wrap:last-child { page-break-after: avoid; break-after: avoid; }
       .fp-corner { display: none !important; }
-      .book-page, .lb-page { width: 100%; box-shadow: none; margin: 0; }
+      .book-page, .lb-page {
+        width: 100% !important;
+        min-height: 100vh !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+      }
     }
   </style>
 </head>
@@ -4584,7 +4601,7 @@ function exportBookPDF() {
   a.href = url; a.target = '_blank'; a.rel = 'noopener';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 8000);
-  showToast('✓ Flipbook opened — flip through, then click Save as PDF');
+  showToast('✓ Flipbook opened — click Save as PDF, set Margins: None, check Background graphics');
 }
 
 // ── Share link — uploads a self-contained flipbook to Vercel Blob ──
