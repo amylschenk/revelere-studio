@@ -246,11 +246,16 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 
 /* ── Room page ── */
 .db-room { padding: 26px 36px; }
-.db-room-header { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(166,124,82,0.18); }
+.db-room-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(166,124,82,0.18); }
+.db-room-header-left { flex: 1; min-width: 0; }
 .db-room-eyebrow { font-size: 9px; letter-spacing: 0.44em; text-transform: uppercase; color: #A67C52; margin-bottom: 5px; }
 .db-room-name { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 400; line-height: 1.2; margin-bottom: 4px; color: #1B1B1B; }
 .db-room-tagline { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 12px; font-style: italic; color: #8A7E70; }
 .theme-dark .db-room-name, .theme-minimal .db-room-name, .theme-cinematic .db-room-name { color: #D6C8B3; }
+.db-room-budget { text-align: right; flex-shrink: 0; margin-left: 16px; padding-top: 2px; }
+.db-room-budget-label { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #8A7E70; margin-bottom: 2px; }
+.db-room-budget-amt { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 17px; font-weight: 400; color: #A67C52; line-height: 1; }
+.theme-dark .db-room-budget-amt, .theme-minimal .db-room-budget-amt, .theme-cinematic .db-room-budget-amt { color: #C4A882; }
 
 /* ── Photo strip ── */
 .db-strip-labels { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 4px; }
@@ -4163,12 +4168,17 @@ async function buildDesignBook() {
       const origSrc  = toImgSrc((room.views && room.views[0] && room.views[0].src) || room.src);
       const afterSrc = toImgSrc(room.after);
       const moodPhotos = getMoodPhotosForRoom(room);
+      const roomBudgetAmt = (S.sourcing[room.id] || []).filter(x => x.status !== 'rejected').reduce((s, i) => s + i.price, 0);
+      const roomBudgetHtml = roomBudgetAmt > 0 ? `<div class="db-room-budget"><div class="db-room-budget-label">Est. Budget</div><div class="db-room-budget-amt">$${roomBudgetAmt.toLocaleString()}</div></div>` : '';
 
       const roomPageHtml = incEmpty ? `
         <div class="db-room-header">
-          <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
-          <div class="db-room-name">${name} | ${room.name}</div>
-          <div class="db-room-tagline">${headline}</div>
+          <div class="db-room-header-left">
+            <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
+            <div class="db-room-name">${name} | ${room.name}</div>
+            <div class="db-room-tagline">${headline}</div>
+          </div>
+          ${roomBudgetHtml}
         </div>
         <div class="db-strip-labels">
           <div class="db-strip-label">Original</div>
@@ -4205,9 +4215,12 @@ async function buildDesignBook() {
         </div>`
       : `
         <div class="db-room-header">
-          <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
-          <div class="db-room-name">${name} | ${room.name}</div>
-          <div class="db-room-tagline">${headline}</div>
+          <div class="db-room-header-left">
+            <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
+            <div class="db-room-name">${name} | ${room.name}</div>
+            <div class="db-room-tagline">${headline}</div>
+          </div>
+          ${roomBudgetHtml}
         </div>
         <div class="db-strip-labels-2">
           <div class="db-strip-label">Before</div>
@@ -4256,9 +4269,12 @@ async function buildDesignBook() {
             <div class="book-page theme-${theme}">
               <div class="db-room">
                 <div class="db-room-header">
-                  <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · View ${viewChar}</div>
-                  <div class="db-room-name">${name} | ${room.name}</div>
-                  <div class="db-room-tagline">Signature View — Focal Point ${viewChar}</div>
+                  <div class="db-room-header-left">
+                    <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · View ${viewChar}</div>
+                    <div class="db-room-name">${name} | ${room.name}</div>
+                    <div class="db-room-tagline">Signature View — Focal Point ${viewChar}</div>
+                  </div>
+                  ${roomBudgetHtml}
                 </div>
                 <div class="db-photo" style="aspect-ratio:16/9;margin-bottom:16px;border-radius:3px;overflow:hidden;width:100%;">
                   <img src="${toImgSrc(v.after)}" alt="View ${viewChar}" style="width:100%;height:100%;object-fit:cover;">
@@ -4319,52 +4335,113 @@ async function buildDesignBook() {
     }
   }
 
-  // ── Budget summary ─────────────────────────────────────────
+  // ── Budget summary (paginated) ────────────────────────────
   if (incBudget) {
     const budgetRooms = activeRooms.map(r => ({
       room: r,
       items: (S.sourcing[r.id] || []).filter(x => x.status !== 'rejected'),
     })).filter(x => x.items.length > 0);
 
-    const grandTotal = budgetRooms.reduce((s, x) => s + x.items.reduce((ss, i) => ss + i.price, 0), 0);
-    const totalItems = budgetRooms.reduce((s, x) => s + x.items.length, 0);
-
     if (budgetRooms.length > 0) {
-      pages.push(`
-        <div class="book-page theme-${theme}">
-          <div class="db-budget">
-            <div class="db-budget-eyebrow">Investment Summary</div>
-            <div class="db-budget-title">${name}</div>
-            <div class="db-budget-subtitle">${totalItems} selected items across ${budgetRooms.length} room${budgetRooms.length !== 1 ? 's' : ''} · ${date}</div>
+      const grandTotal = budgetRooms.reduce((s, x) => s + x.items.reduce((ss, i) => ss + i.price, 0), 0);
+      const totalItems  = budgetRooms.reduce((s, x) => s + x.items.length, 0);
 
-            ${budgetRooms.map(({ room, items }) => {
-              const roomTotal = items.reduce((s, i) => s + i.price, 0);
-              return `
-              <div class="db-budget-room-hdr">
-                <div>
-                  <div class="db-budget-room-name">${room.name}</div>
-                  <div class="db-budget-room-sub">${room.type} · ${items.length} item${items.length !== 1 ? 's' : ''}</div>
-                </div>
+      // Approximate heights (px) — used to decide when to start a new page
+      const PAGE_H     = 540;  // target page height
+      const PAD_V      = 72;   // 36px top + 36px bottom padding in .db-budget
+      const HDR_FIRST  = 124;  // eyebrow + title + subtitle
+      const HDR_CONT   = 60;   // eyebrow + smaller title on continuation pages
+      const FOOTER_H   = 80;   // grand total row + note
+      const ROOM_HDR_H = 44;   // room name block + border
+      const ITEM_H     = 26;   // one line item row
+      const SUBTOTAL_H = 30;   // room subtotal row
+
+      // Build flat list of rows to place
+      const rows = [];
+      for (const { room, items } of budgetRooms) {
+        const roomTotal = items.reduce((s, i) => s + i.price, 0);
+        rows.push({ type: 'room-hdr', room, items });
+        for (const item of items) rows.push({ type: 'item', item });
+        rows.push({ type: 'subtotal', room, roomTotal });
+      }
+
+      // Paginate rows into pages
+      const budgetPages = []; // [{rows:[], isFirst, isLast}]
+      let cur = [], usedH = 0, isFirstPage = true;
+
+      const flush = () => {
+        budgetPages.push({ rows: cur, isFirst: isFirstPage });
+        cur = []; usedH = 0; isFirstPage = false;
+      };
+
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row  = rows[ri];
+        const hdr  = isFirstPage ? HDR_FIRST : HDR_CONT;
+        const avail = PAGE_H - PAD_V - hdr;
+        const isLastRow = ri === rows.length - 1;
+        // height this row consumes
+        const rh = row.type === 'room-hdr' ? ROOM_HDR_H
+                 : row.type === 'item'     ? ITEM_H
+                 : SUBTOTAL_H;
+        // reserve footer space on what might be the last page
+        const footerReserve = isLastRow ? FOOTER_H : 0;
+
+        if (cur.length > 0 && usedH + rh + footerReserve > avail) {
+          flush();
+        }
+        cur.push(row);
+        usedH += rh;
+      }
+      if (cur.length) flush();
+
+      // Mark last page
+      if (budgetPages.length) budgetPages[budgetPages.length - 1].isLast = true;
+
+      // Render each page
+      budgetPages.forEach(({ rows: pRows, isFirst: pFirst, isLast: pLast }) => {
+        const bodyHtml = pRows.map(row => {
+          if (row.type === 'room-hdr') return `
+            <div class="db-budget-room-hdr">
+              <div>
+                <div class="db-budget-room-name">${row.room.name}</div>
+                <div class="db-budget-room-sub">${row.room.type} · ${row.items.length} item${row.items.length !== 1 ? 's' : ''}</div>
               </div>
-              ${items.map(item => `
-                <div class="db-budget-line">
-                  <div class="db-budget-line-name">${item.name}</div>
-                  <div class="db-budget-line-vendor">${item.vendor}</div>
-                  <div class="db-budget-line-price">$${item.price.toLocaleString()}</div>
-                </div>`).join('')}
-              <div class="db-budget-subtotal">
-                <div class="db-budget-subtotal-label">Room Total</div>
-                <div class="db-budget-subtotal-amt">$${roomTotal.toLocaleString()}</div>
-              </div>`;
-            }).join('')}
+            </div>`;
+          if (row.type === 'item') return `
+            <div class="db-budget-line">
+              <div class="db-budget-line-name">${row.item.name}</div>
+              <div class="db-budget-line-vendor">${row.item.vendor}</div>
+              <div class="db-budget-line-price">$${row.item.price.toLocaleString()}</div>
+            </div>`;
+          return `
+            <div class="db-budget-subtotal">
+              <div class="db-budget-subtotal-label">Room Total</div>
+              <div class="db-budget-subtotal-amt">$${row.roomTotal.toLocaleString()}</div>
+            </div>`;
+        }).join('');
 
-            <div class="db-budget-grand">
-              <div class="db-budget-grand-label">Estimated Total Investment</div>
-              <div class="db-budget-grand-amt">$${grandTotal.toLocaleString()}</div>
+        pages.push(`
+          <div class="book-page theme-${theme}">
+            <div class="db-budget">
+              ${pFirst ? `
+                <div class="db-budget-eyebrow">Investment Summary</div>
+                <div class="db-budget-title">${name}</div>
+                <div class="db-budget-subtitle">${totalItems} selected items across ${budgetRooms.length} room${budgetRooms.length !== 1 ? 's' : ''} · ${date}</div>
+              ` : `
+                <div class="db-budget-eyebrow">Investment Summary cont'd</div>
+                <div class="db-budget-title" style="font-size:22px;margin-bottom:14px;">${name}</div>
+              `}
+              ${bodyHtml}
+              ${pLast ? `
+                <div class="db-budget-grand">
+                  <div class="db-budget-grand-label">Estimated Total Investment</div>
+                  <div class="db-budget-grand-amt">$${grandTotal.toLocaleString()}</div>
+                </div>
+                <div class="db-budget-note">Estimates based on current pricing. Final costs may vary. Shipping, installation, and tax not included.</div>
+              ` : ''}
             </div>
-            <div class="db-budget-note">Estimates based on current pricing. Final costs may vary. Shipping, installation, and tax not included.</div>
-          </div>
-        </div>`);
+          </div>`);
+      });
     }
   }
 
@@ -5300,52 +5377,60 @@ async function buildLookbook() {
     }
   }
 
-  // ── Budget summary (Lookbook) ───────────────
+  // ── Budget summary (Lookbook — paginated) ───────────────
   if (incBudget) {
     const budgetRooms = activeRooms.map(r => ({
       room: r,
       items: (S.sourcing[r.id] || []).filter(x => x.status !== 'rejected'),
     })).filter(x => x.items.length > 0);
 
-    const grandTotal = budgetRooms.reduce((s, x) => s + x.items.reduce((ss, i) => ss + i.price, 0), 0);
-    const totalItems = budgetRooms.reduce((s, x) => s + x.items.length, 0);
-
     if (budgetRooms.length > 0) {
-      pages.push(`
-        <div class="lb-page">
-          <div class="db-budget">
-            <div class="db-budget-eyebrow">Investment Summary</div>
-            <div class="db-budget-title">${name}</div>
-            <div class="db-budget-subtitle">${totalItems} selected items across ${budgetRooms.length} room${budgetRooms.length !== 1 ? 's' : ''} · ${date}</div>
+      const grandTotal = budgetRooms.reduce((s, x) => s + x.items.reduce((ss, i) => ss + i.price, 0), 0);
+      const totalItems  = budgetRooms.reduce((s, x) => s + x.items.length, 0);
 
-            ${budgetRooms.map(({ room, items }) => {
-              const roomTotal = items.reduce((s, i) => s + i.price, 0);
-              return `
-              <div class="db-budget-room-hdr">
-                <div>
-                  <div class="db-budget-room-name">${room.name}</div>
-                  <div class="db-budget-room-sub">${room.type} · ${items.length} item${items.length !== 1 ? 's' : ''}</div>
-                </div>
-              </div>
-              ${items.map(item => `
-                <div class="db-budget-line">
-                  <div class="db-budget-line-name">${item.name}</div>
-                  <div class="db-budget-line-vendor">${item.vendor}</div>
-                  <div class="db-budget-line-price">$${item.price.toLocaleString()}</div>
-                </div>`).join('')}
-              <div class="db-budget-subtotal">
-                <div class="db-budget-subtotal-label">Room Total</div>
-                <div class="db-budget-subtotal-amt">$${roomTotal.toLocaleString()}</div>
-              </div>`;
-            }).join('')}
+      const PAGE_H = 540; const PAD_V = 72; const HDR_FIRST = 124; const HDR_CONT = 60;
+      const FOOTER_H = 80; const ROOM_HDR_H = 44; const ITEM_H = 26; const SUBTOTAL_H = 30;
 
-            <div class="db-budget-grand">
-              <div class="db-budget-grand-label">Estimated Total Investment</div>
-              <div class="db-budget-grand-amt">$${grandTotal.toLocaleString()}</div>
+      const rows = [];
+      for (const { room, items } of budgetRooms) {
+        const roomTotal = items.reduce((s, i) => s + i.price, 0);
+        rows.push({ type: 'room-hdr', room, items });
+        for (const item of items) rows.push({ type: 'item', item });
+        rows.push({ type: 'subtotal', room, roomTotal });
+      }
+
+      const budgetPages = [];
+      let cur = [], usedH = 0, isFirstPage = true;
+      const flush = () => { budgetPages.push({ rows: cur, isFirst: isFirstPage }); cur = []; usedH = 0; isFirstPage = false; };
+
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const hdr = isFirstPage ? HDR_FIRST : HDR_CONT;
+        const avail = PAGE_H - PAD_V - hdr;
+        const isLastRow = ri === rows.length - 1;
+        const rh = row.type === 'room-hdr' ? ROOM_HDR_H : row.type === 'item' ? ITEM_H : SUBTOTAL_H;
+        if (cur.length > 0 && usedH + rh + (isLastRow ? FOOTER_H : 0) > avail) flush();
+        cur.push(row); usedH += rh;
+      }
+      if (cur.length) flush();
+      if (budgetPages.length) budgetPages[budgetPages.length - 1].isLast = true;
+
+      budgetPages.forEach(({ rows: pRows, isFirst: pFirst, isLast: pLast }) => {
+        const bodyHtml = pRows.map(row => {
+          if (row.type === 'room-hdr') return `<div class="db-budget-room-hdr"><div><div class="db-budget-room-name">${row.room.name}</div><div class="db-budget-room-sub">${row.room.type} · ${row.items.length} item${row.items.length !== 1 ? 's' : ''}</div></div></div>`;
+          if (row.type === 'item') return `<div class="db-budget-line"><div class="db-budget-line-name">${row.item.name}</div><div class="db-budget-line-vendor">${row.item.vendor}</div><div class="db-budget-line-price">$${row.item.price.toLocaleString()}</div></div>`;
+          return `<div class="db-budget-subtotal"><div class="db-budget-subtotal-label">Room Total</div><div class="db-budget-subtotal-amt">$${row.roomTotal.toLocaleString()}</div></div>`;
+        }).join('');
+        pages.push(`
+          <div class="lb-page">
+            <div class="db-budget">
+              ${pFirst ? `<div class="db-budget-eyebrow">Investment Summary</div><div class="db-budget-title">${name}</div><div class="db-budget-subtitle">${totalItems} selected items across ${budgetRooms.length} room${budgetRooms.length !== 1 ? 's' : ''} · ${date}</div>`
+                       : `<div class="db-budget-eyebrow">Investment Summary cont'd</div><div class="db-budget-title" style="font-size:22px;margin-bottom:14px;">${name}</div>`}
+              ${bodyHtml}
+              ${pLast ? `<div class="db-budget-grand"><div class="db-budget-grand-label">Estimated Total Investment</div><div class="db-budget-grand-amt">$${grandTotal.toLocaleString()}</div></div><div class="db-budget-note">Estimates based on current pricing. Final costs may vary. Shipping, installation, and tax not included.</div>` : ''}
             </div>
-            <div class="db-budget-note">Estimates based on current pricing. Final costs may vary. Shipping, installation, and tax not included.</div>
-          </div>
-        </div>`);
+          </div>`);
+      });
     }
   }
 
