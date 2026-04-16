@@ -1110,6 +1110,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
           <div class="export-btns">
             <div style="font-size:10px;letter-spacing:0.17em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Export</div>
             <button class="btn btn-primary" style="justify-content:center;" onclick="exportBookPDF()">⬇ Save as PDF</button>
+            <button id="share-link-btn" class="btn btn-outline" style="justify-content:center;" onclick="shareDesignBook()">↗ Share Link</button>
             <button class="btn btn-outline" style="justify-content:center;" onclick="exportCanva()">◻ Canva JSON</button>
             <button class="btn btn-outline" style="justify-content:center;" onclick="exportInDesign()">◐ InDesign CSV</button>
           </div>
@@ -3827,6 +3828,8 @@ let BOOK_BLOB_URLS = [];    // track blob URLs so we can revoke them
 
 // Convert base64 data URL to a blob URL the browser will render without blocking.
 // If it's already an https:// URL, return as-is.
+// _blobSrcMap tracks blob: → original src so shareDesignBook() can reverse the conversion.
+const _blobSrcMap = {};
 function toImgSrc(dataUrl) {
   if (!dataUrl) return '';
   if (dataUrl.startsWith('http')) return dataUrl;
@@ -3839,6 +3842,7 @@ function toImgSrc(dataUrl) {
     const blob = new Blob([arr], { type: mime });
     const url = URL.createObjectURL(blob);
     BOOK_BLOB_URLS.push(url);
+    _blobSrcMap[url] = dataUrl; // remember original for share export
     return url;
   } catch(e) {
     return dataUrl; // fallback — let browser try
@@ -4581,6 +4585,204 @@ function exportBookPDF() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 8000);
   showToast('✓ Flipbook opened — flip through, then click Save as PDF');
+}
+
+// ── Share link — uploads a self-contained flipbook to Vercel Blob ──
+async function shareDesignBook() {
+  const wrap = document.getElementById('book-preview-wrap');
+  if (!wrap || !wrap.querySelector('.book-page, .lb-page')) {
+    showToast('Generate the Design Book first, then share', true);
+    return;
+  }
+  const btn = document.getElementById('share-link-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Building link…'; }
+  showToast('Building share link — this may take a moment…');
+
+  try {
+    // Clone rendered book, strip regen UI
+    const exportWrap = wrap.cloneNode(true);
+    exportWrap.querySelectorAll('.db-regen-btn').forEach(b => b.remove());
+    exportWrap.querySelectorAll('.db-regen-wrap').forEach(w => {
+      const inner = w.querySelector('.db-note-body, .db-lighting-col span, .lb-room-line');
+      if (inner) w.replaceWith(inner.cloneNode(true));
+    });
+
+    // Swap blob: URLs back to their original data/CDN URLs
+    exportWrap.querySelectorAll('img').forEach(img => {
+      if (img.src && img.src.startsWith('blob:')) {
+        const orig = _blobSrcMap[img.src];
+        if (orig) img.src = orig;
+        else img.removeAttribute('src');
+      }
+    });
+
+    // Extract Design Book CSS from the current stylesheet
+    const bookCss = [];
+    try {
+      Array.from(document.styleSheets).forEach(ss => {
+        try {
+          Array.from(ss.cssRules).forEach(rule => {
+            if (rule.cssText && (
+              rule.cssText.includes('.db-') || rule.cssText.includes('.lb-') ||
+              rule.cssText.includes('.book-page') || rule.cssText.includes('.theme-')
+            )) bookCss.push(rule.cssText);
+          });
+        } catch(e) {}
+      });
+    } catch(e) {}
+
+    const pages = Array.from(exportWrap.querySelectorAll('.book-page, .lb-page'));
+    const total = pages.length;
+    if (!total) { showToast('No pages to share', true); return; }
+
+    const pagesHtml = pages.map((p, i) =>
+      `<div class="fp-wrap ${i===0?'active':''}" id="fp-${i}">
+        ${p.outerHTML}
+        <div class="fp-corner" onclick="fpNext()" title="Next page"></div>
+      </div>`
+    ).join('');
+
+    const propName = (S.propName || 'Design Book').replace(/[<>"]/g, '');
+
+    const html = `<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revelere — ${propName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#1c1814;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 20px 100px;}
+img{max-width:100%;display:block;}
+#flipbook{width:720px;position:relative;}
+.fp-wrap{display:none;position:relative;width:720px;transform-origin:center center;}
+.fp-wrap.active{display:block;}
+.fp-wrap.fp-out{animation:fpFlipOut 0.35s ease forwards;}
+.fp-wrap.fp-in{animation:fpFlipIn 0.35s ease forwards;}
+@keyframes fpFlipOut{from{opacity:1;transform:perspective(1400px) rotateY(0deg);}to{opacity:0;transform:perspective(1400px) rotateY(-22deg) scaleX(0.94);}}
+@keyframes fpFlipIn{from{opacity:0;transform:perspective(1400px) rotateY(18deg) scaleX(0.94);}to{opacity:1;transform:perspective(1400px) rotateY(0deg);}}
+.fp-corner{position:absolute;bottom:0;right:0;width:0;height:0;cursor:pointer;z-index:20;border-style:solid;border-width:0 0 38px 38px;border-color:transparent transparent #d4ccc2 transparent;transition:border-width 0.22s ease;filter:drop-shadow(-2px -2px 5px rgba(0,0,0,0.22));}
+.fp-wrap:hover .fp-corner{border-width:0 0 62px 62px;}
+#fp-nav{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:rgba(28,24,20,0.92);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);border-radius:40px;padding:10px 20px;z-index:100;}
+.fp-btn{background:none;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.7);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.fp-btn:hover{background:rgba(166,124,82,0.3);border-color:#A67C52;color:white;}
+.fp-btn:disabled{opacity:0.25;cursor:default;}
+#fp-label{font-size:11px;letter-spacing:0.12em;color:rgba(255,255,255,0.45);min-width:80px;text-align:center;}
+.book-page,.lb-page{width:720px;margin:0;}
+${bookCss.join('\n')}
+@media(max-width:760px){
+  body{padding:8px 0 80px;}
+  #flipbook{transform-origin:top center;}
+  .book-page,.lb-page{width:720px;}
+}
+@media print{
+  body{background:none;padding:0;}
+  #fp-nav{display:none!important;}
+  .fp-wrap{display:block!important;width:100%;page-break-after:always;}
+  .fp-corner{display:none!important;}
+  .book-page,.lb-page{width:100%;box-shadow:none;margin:0;}
+}
+</style>
+</head>
+<body>
+<div id="flipbook">${pagesHtml}</div>
+<div id="fp-nav">
+  <button class="fp-btn" id="fp-prev-btn" onclick="fpPrev()">&#8592;</button>
+  <span id="fp-label">1 / ${total}</span>
+  <button class="fp-btn" id="fp-next-btn" onclick="fpNext()">&#8594;</button>
+</div>
+<script>
+(function(){
+  var fp=0,fpTotal=${total};
+  function fpShow(idx){
+    var cur=document.getElementById('fp-'+fp);
+    var nxt=document.getElementById('fp-'+idx);
+    if(!nxt||idx===fp)return;
+    cur.classList.add('fp-out');
+    setTimeout(function(){
+      cur.classList.remove('active','fp-out');
+      nxt.classList.add('active','fp-in');
+      setTimeout(function(){nxt.classList.remove('fp-in');},360);
+      fp=idx;
+      document.getElementById('fp-label').textContent=(idx+1)+' / '+fpTotal;
+      document.getElementById('fp-prev-btn').disabled=fp===0;
+      document.getElementById('fp-next-btn').disabled=fp===fpTotal-1;
+      fpScale();
+    },340);
+  }
+  window.fpNext=function(){if(fp<fpTotal-1)fpShow(fp+1);};
+  window.fpPrev=function(){if(fp>0)fpShow(fp-1);};
+  document.getElementById('fp-prev-btn').disabled=true;
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='ArrowDown')fpNext();
+    if(e.key==='ArrowLeft'||e.key==='ArrowUp')fpPrev();
+  });
+  var _tx=0;
+  document.addEventListener('touchstart',function(e){_tx=e.touches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',function(e){
+    var dx=_tx-e.changedTouches[0].clientX;
+    if(Math.abs(dx)>50)dx>0?fpNext():fpPrev();
+  },{passive:true});
+  function fpScale(){
+    var sc=Math.min(1,(window.innerWidth-16)/720);
+    document.getElementById('flipbook').style.zoom=sc;
+  }
+  window.addEventListener('resize',fpScale);
+  fpScale();
+})();
+<\/script>
+</body></html>`;
+
+    const r = await fetch('/api/share', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ html }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    const { url } = await r.json();
+    showShareModal(url);
+
+  } catch(e) {
+    console.error('Share error:', e);
+    showToast('Share failed: ' + e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↗ Share Link'; }
+  }
+}
+
+function showShareModal(url) {
+  const existing = document.getElementById('share-modal-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'share-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#FAF5EE;border-radius:8px;padding:32px;max-width:500px;width:90%;box-shadow:0 20px 64px rgba(0,0,0,0.35);">
+      <div style="font-size:9px;letter-spacing:0.38em;text-transform:uppercase;color:#A67C52;margin-bottom:8px;">Design Book · Client Link</div>
+      <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:24px;font-weight:400;color:#1B1B1B;margin-bottom:6px;">Ready to share</div>
+      <div style="font-size:12px;color:#8A7E70;margin-bottom:20px;line-height:1.65;">Opens a read-only flipbook viewer. Page-turning, keyboard navigation, and touch swipe are included. Your studio, API keys, and project data are not accessible from this URL.</div>
+      <div style="display:flex;gap:8px;margin-bottom:18px;align-items:stretch;">
+        <input id="share-url-input" value="${url}" readonly style="flex:1;padding:10px 12px;border:1px solid #D6C8B3;border-radius:4px;font-size:11px;color:#5a504a;background:#F5F2EE;font-family:'DM Sans',sans-serif;min-width:0;cursor:text;">
+        <button onclick="copyShareUrl()" style="padding:0 18px;background:#A67C52;color:white;border:none;border-radius:4px;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:'DM Sans',sans-serif;">Copy link</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <a href="${url}" target="_blank" rel="noopener" style="font-size:12px;color:#A67C52;text-decoration:none;letter-spacing:0.04em;">Preview ↗</a>
+        <button onclick="document.getElementById('share-modal-overlay').remove()" style="padding:8px 18px;background:transparent;border:1px solid #D6C8B3;border-radius:4px;font-size:12px;color:#8A7E70;cursor:pointer;font-family:'DM Sans',sans-serif;">Done</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  // auto-select URL for easy copy
+  setTimeout(() => { const inp = document.getElementById('share-url-input'); if (inp) inp.select(); }, 80);
+}
+
+function copyShareUrl() {
+  const input = document.getElementById('share-url-input');
+  if (!input) return;
+  navigator.clipboard.writeText(input.value)
+    .then(() => showToast('✓ Link copied to clipboard'))
+    .catch(() => { input.select(); document.execCommand('copy'); showToast('✓ Link copied'); });
 }
 
 // ── InDesign export (CSV data merge) ─────────────────────────
