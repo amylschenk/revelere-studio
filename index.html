@@ -316,6 +316,11 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 .theme-dark .db-item-name, .theme-minimal .db-item-name, .theme-cinematic .db-item-name { color: #D6C8B3; }
 .theme-dark .db-item-price, .theme-minimal .db-item-price, .theme-cinematic .db-item-price { color: #D6C8B3; }
 
+/* ── Before/After 2-col strip (when empty is excluded) ── */
+.db-strip-labels-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.db-photo-strip-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.db-photo-strip-2 .db-photo { aspect-ratio: 4/3; border-radius: 3px; overflow: hidden; background: #EDE9E3; }
+.db-photo-strip-2 .db-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* ── Photo index ── */
 .db-photo-index { padding: 28px 32px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
 .db-photo-index-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(166,124,82,0.2); }
@@ -1090,6 +1095,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-cover" checked> Cover + index</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-photos" checked> Photo index</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-rooms" checked> Per-room detail pages</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding-left:20px;"><input type="checkbox" id="inc-empty"> &nbsp;Include empty room photo</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-sourcing" checked> Shopping list</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-budget" checked> Budget summary</label>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="inc-nextsteps"> Next steps checklist</label>
@@ -4040,6 +4046,7 @@ async function buildDesignBook() {
   const incCover   = document.getElementById('inc-cover')?.checked !== false;
   const incPhotos  = document.getElementById('inc-photos')?.checked !== false;
   const incRooms   = document.getElementById('inc-rooms')?.checked !== false;
+  const incEmpty   = document.getElementById('inc-empty')?.checked === true;
   const incSource  = document.getElementById('inc-sourcing')?.checked !== false;
   const incBudget  = document.getElementById('inc-budget')?.checked !== false;
   const incNext    = document.getElementById('inc-nextsteps')?.checked !== false;
@@ -4153,63 +4160,85 @@ async function buildDesignBook() {
       const afterSrc = toImgSrc(room.after);
       const moodPhotos = getMoodPhotosForRoom(room);
 
+      const roomPageHtml = incEmpty ? `
+        <div class="db-room-header">
+          <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
+          <div class="db-room-name">${name} | ${room.name}</div>
+          <div class="db-room-tagline">${headline}</div>
+        </div>
+        <div class="db-strip-labels">
+          <div class="db-strip-label">Original</div>
+          <div class="db-strip-label">Empty</div>
+          <div class="db-strip-label">Revelere Vision</div>
+        </div>
+        <div class="db-photo-strip">
+          <div class="db-photo">
+            ${origSrc ? `<img src="${origSrc}" alt="Original">` : '<div class="db-photo-empty">Original</div>'}
+          </div>
+          <div class="db-photo">
+            ${emptySrc ? `<img src="${emptySrc}" alt="Empty">` : '<div class="db-photo-empty">Pending</div>'}
+          </div>
+          <div class="db-photo db-photo-vision">
+            ${afterSrc ? `<img src="${afterSrc}" alt="Revelere Vision">` : '<div class="db-photo-empty" style="color:rgba(166,124,82,0.4);">✦ Pending</div>'}
+          </div>
+        </div>
+        ${sectionHdr('Design Notes')}
+        <div class="db-notes-grid">
+          <div><div class="db-note-label">Design Intent</div><div class="db-regen-wrap"><div class="db-note-body">${notes.intent}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','intent',this)" title="Regenerate with AI">↻</button></div></div>
+          <div><div class="db-note-label">Experience Layer</div><div class="db-regen-wrap"><div class="db-note-body">${notes.experience}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','experience',this)" title="Regenerate with AI">↻</button></div></div>
+          <div><div class="db-note-label">Material Language</div><div class="db-regen-wrap"><div class="db-note-body">${notes.materials}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','materials',this)" title="Regenerate with AI">↻</button></div></div>
+        </div>
+        ${sectionHdr('Lighting Scene')}
+        <div class="db-lighting-grid">
+          <div class="db-lighting-col"><div class="db-regen-wrap"><span>${notes.lighting}</span><button class="db-regen-btn" onclick="regenBlock('${room.id}','lighting',this)" title="Regenerate with AI">↻</button></div></div>
+          <div class="db-lighting-col" style="color:#8A7E70;font-style:italic;">${room.brief?.notes || 'Layered ambient, accent, and task lighting throughout.'}</div>
+          <div class="db-lighting-col" style="color:#8A7E70;font-style:italic;">All fixtures dimmable. Warm white bulbs (2700K) throughout. Designed to shift from daylight to evening atmosphere.</div>
+        </div>
+        ${sectionHdr('Mood & Materials')}
+        <div class="db-mood-grid">
+          ${moodPhotos.map(p => `<div class="db-mood-img"><img src="${p.src || p}" alt="${p.label || ''}" onerror="this.style.display='none'"></div>`).join('')}
+          ${Array(Math.max(0, 4 - moodPhotos.length)).fill('<div class="db-mood-img"></div>').join('')}
+        </div>`
+      : `
+        <div class="db-room-header">
+          <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
+          <div class="db-room-name">${name} | ${room.name}</div>
+          <div class="db-room-tagline">${headline}</div>
+        </div>
+        <div class="db-strip-labels-2">
+          <div class="db-strip-label">Before</div>
+          <div class="db-strip-label">Revelere Vision</div>
+        </div>
+        <div class="db-photo-strip-2">
+          <div class="db-photo">
+            ${origSrc ? `<img src="${origSrc}" alt="Before">` : '<div class="db-photo-empty">Original</div>'}
+          </div>
+          <div class="db-photo db-photo-vision">
+            ${afterSrc ? `<img src="${afterSrc}" alt="Revelere Vision">` : '<div class="db-photo-empty" style="color:rgba(166,124,82,0.4);">✦ Pending</div>'}
+          </div>
+        </div>
+        ${sectionHdr('Mood & Materials')}
+        <div class="db-mood-grid">
+          ${moodPhotos.map(p => `<div class="db-mood-img"><img src="${p.src || p}" alt="${p.label || ''}" onerror="this.style.display='none'"></div>`).join('')}
+          ${Array(Math.max(0, 4 - moodPhotos.length)).fill('<div class="db-mood-img"></div>').join('')}
+        </div>
+        ${sectionHdr('Design Notes')}
+        <div class="db-notes-grid">
+          <div><div class="db-note-label">Design Intent</div><div class="db-regen-wrap"><div class="db-note-body">${notes.intent}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','intent',this)" title="Regenerate with AI">↻</button></div></div>
+          <div><div class="db-note-label">Experience Layer</div><div class="db-regen-wrap"><div class="db-note-body">${notes.experience}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','experience',this)" title="Regenerate with AI">↻</button></div></div>
+          <div><div class="db-note-label">Material Language</div><div class="db-regen-wrap"><div class="db-note-body">${notes.materials}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','materials',this)" title="Regenerate with AI">↻</button></div></div>
+        </div>
+        ${sectionHdr('Lighting Scene')}
+        <div class="db-lighting-grid">
+          <div class="db-lighting-col"><div class="db-regen-wrap"><span>${notes.lighting}</span><button class="db-regen-btn" onclick="regenBlock('${room.id}','lighting',this)" title="Regenerate with AI">↻</button></div></div>
+          <div class="db-lighting-col" style="color:#8A7E70;font-style:italic;">${room.brief?.notes || 'Layered ambient, accent, and task lighting throughout.'}</div>
+          <div class="db-lighting-col" style="color:#8A7E70;font-style:italic;">All fixtures dimmable. Warm white bulbs (2700K) throughout. Designed to shift from daylight to evening atmosphere.</div>
+        </div>`;
+
       pages.push(`
         <div class="book-page theme-${theme}">
           <div class="db-room">
-            <div class="db-room-header">
-              <div class="db-room-eyebrow">Revelere · ${String(i+1).padStart(2,'0')} · ${preset !== 'Revelere Core' ? preset : 'Signature'}</div>
-              <div class="db-room-name">${name} | ${room.name}</div>
-              <div class="db-room-tagline">${headline}</div>
-            </div>
-
-            <div class="db-strip-labels">
-              <div class="db-strip-label">Original</div>
-              <div class="db-strip-label">Empty</div>
-              <div class="db-strip-label">Revelere Vision</div>
-            </div>
-            <div class="db-photo-strip">
-              <div class="db-photo">
-                ${origSrc ? `<img src="${origSrc}" alt="Original">` : '<div class="db-photo-empty">Original</div>'}
-              </div>
-              <div class="db-photo">
-                ${emptySrc ? `<img src="${emptySrc}" alt="Empty">` : '<div class="db-photo-empty">Pending</div>'}
-              </div>
-              <div class="db-photo db-photo-vision">
-                ${afterSrc ? `<img src="${afterSrc}" alt="Revelere Vision">` : '<div class="db-photo-empty" style="color:rgba(166,124,82,0.4);">✦ Pending</div>'}
-              </div>
-            </div>
-
-            ${sectionHdr('Design Notes')}
-            <div class="db-notes-grid">
-              <div>
-                <div class="db-note-label">Design Intent</div>
-                <div class="db-regen-wrap"><div class="db-note-body">${notes.intent}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','intent',this)" title="Regenerate with AI">↻</button></div>
-              </div>
-              <div>
-                <div class="db-note-label">Experience Layer</div>
-                <div class="db-regen-wrap"><div class="db-note-body">${notes.experience}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','experience',this)" title="Regenerate with AI">↻</button></div>
-              </div>
-              <div>
-                <div class="db-note-label">Material Language</div>
-                <div class="db-regen-wrap"><div class="db-note-body">${notes.materials}</div><button class="db-regen-btn" onclick="regenBlock('${room.id}','materials',this)" title="Regenerate with AI">↻</button></div>
-              </div>
-            </div>
-
-            ${sectionHdr('Lighting Scene')}
-            <div class="db-lighting-grid">
-              <div class="db-lighting-col"><div class="db-regen-wrap"><span>${notes.lighting}</span><button class="db-regen-btn" onclick="regenBlock('${room.id}','lighting',this)" title="Regenerate with AI">↻</button></div></div>
-              <div class="db-lighting-col" style="color:#8A7E70;font-style:italic;">${room.brief?.notes || 'Layered ambient, accent, and task lighting throughout.'}</div>
-              <div class="db-lighting-col" style="color:#8A7E70;font-style:italic;">All fixtures dimmable. Warm white bulbs (2700K) throughout. Designed to shift from daylight to evening atmosphere.</div>
-            </div>
-
-            ${sectionHdr('Mood & Materials')}
-            <div class="db-mood-grid">
-              ${moodPhotos.map(p => `
-                <div class="db-mood-img">
-                  <img src="${p.src || p}" alt="${p.label || ''}" onerror="this.style.display='none'">
-                </div>`).join('')}
-              ${Array(Math.max(0, 4 - moodPhotos.length)).fill('<div class="db-mood-img"></div>').join('')}
-            </div>
+            ${roomPageHtml}
           </div>
         </div>`);
 
@@ -4905,6 +4934,7 @@ async function buildLookbook() {
   const incCover  = document.getElementById('inc-cover')?.checked !== false;
   const incPhotos = document.getElementById('inc-photos')?.checked !== false;
   const incRooms  = document.getElementById('inc-rooms')?.checked !== false;
+  const incEmpty  = document.getElementById('inc-empty')?.checked === true;
   const incSource = document.getElementById('inc-sourcing')?.checked !== false;
   const incBudget = document.getElementById('inc-budget')?.checked !== false;
   const incNext   = document.getElementById('inc-nextsteps')?.checked !== false;
