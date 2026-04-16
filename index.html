@@ -4323,7 +4323,7 @@ async function buildDesignBook() {
   if (incBudget) {
     const budgetRooms = activeRooms.map(r => ({
       room: r,
-      items: (S.sourcing[r.id] || []).filter(x => x.status === 'accepted'),
+      items: (S.sourcing[r.id] || []).filter(x => x.status !== 'rejected'),
     })).filter(x => x.items.length > 0);
 
     const grandTotal = budgetRooms.reduce((s, x) => s + x.items.reduce((ss, i) => ss + i.price, 0), 0);
@@ -5304,7 +5304,7 @@ async function buildLookbook() {
   if (incBudget) {
     const budgetRooms = activeRooms.map(r => ({
       room: r,
-      items: (S.sourcing[r.id] || []).filter(x => x.status === 'accepted'),
+      items: (S.sourcing[r.id] || []).filter(x => x.status !== 'rejected'),
     })).filter(x => x.items.length > 0);
 
     const grandTotal = budgetRooms.reduce((s, x) => s + x.items.reduce((ss, i) => ss + i.price, 0), 0);
