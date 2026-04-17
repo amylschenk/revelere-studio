@@ -942,6 +942,11 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
           <div class="after-panel" id="after-panel">
             <div class="after-placeholder"><div class="icon">✦</div><div class="text">After render appears here</div></div>
           </div>
+          <!-- Revelere Style Filter Bar — shown when a render is present -->
+          <div id="filter-bar" style="display:none;padding:10px 17px 11px;border-top:1px solid var(--border);background:var(--ivory-dark);">
+            <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">✦ Revelere Style Filters</div>
+            <div id="filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          </div>
           <div style="padding:13px 17px 4px;">
             <div style="font-size:12px;font-weight:500;" id="after-label">Awaiting generation</div>
             <div style="font-size:12px;color:var(--muted);" id="after-sub">Fill the brief and click generate</div>
@@ -1921,6 +1926,12 @@ function renderDesign(){
   const ap=document.getElementById('after-panel');
   if(view && view.after){
     ap.innerHTML=`<img src="${view.after}" alt="After" loading="lazy"><div class="after-badge">After render</div>`;
+    // Apply saved filter live on the rendered image
+    const savedFilter = room.brief?.afterFilter;
+    if (savedFilter && savedFilter !== 'Natural') {
+      const img = ap.querySelector('img');
+      if (img) img.style.filter = REVELERE_FILTERS[savedFilter] || 'none';
+    }
     document.getElementById('after-label').textContent=`${room.name}${viewLabel} · After render`;
     document.getElementById('after-sub').textContent=`${S.coreEnabled?'Revelere Core · ':''}${S.preset!=='Revelere Core'?S.preset+' · ':''}${room.type||room.name}${S.signatureMoment?' · ✦ Signature':''}`;
   } else if(view && !view.src) {
@@ -1932,6 +1943,8 @@ function renderDesign(){
     document.getElementById('after-label').textContent=`${room.name}${viewLabel} · Awaiting generation`;
     document.getElementById('after-sub').textContent='Fill the brief and click generate';
   }
+  // Show/hide filter bar based on whether a render is present
+  renderFilterBar(room, view);
 }
 
 function setActiveRoom(i){S.activeRoom=i;renderDesign();}
@@ -2166,6 +2179,8 @@ async function generateAfter() {
     const blobAfter = await uploadToBlob(result, `${room.id}-after-${S.activeView}-${Date.now()}.png`);
     view.after = blobAfter;
     if (S.activeView === 0) { room.after = blobAfter; room.brief = brief; }
+    // Reset filter to Natural on new AI generation — the AI already applies the aesthetic
+    if (brief) brief.afterFilter = 'Natural';
     renderOk = true;
     renderDesign();
     updateDashboard();
@@ -2298,20 +2313,110 @@ async function applyAfterEffect(imgSrc, preset){
   });
 }
 
+// ── Revelere Style Filters ────────────────────────────────────────────────────
+// CSS filter strings that map to named Revelere aesthetic presets.
+// These are applied live to the <img> in the after-panel and baked into the
+// image on Accept so the Design Book gets the filtered version automatically.
+const REVELERE_FILTERS = {
+  'Natural':      'none',
+  'Cinematic':    'brightness(0.87) contrast(1.16) saturate(1.1) sepia(0.13)',
+  'Dark & Moody': 'brightness(0.72) contrast(1.28) saturate(1.2)',
+  'Light & Airy': 'brightness(1.14) contrast(0.90) saturate(0.80)',
+  'Warm Luxury':  'brightness(0.93) contrast(1.10) saturate(1.18) sepia(0.24)',
+};
+
+function applyAfterFilter(name) {
+  const room = S.rooms[S.activeRoom];
+  if (!room) return;
+  if (!room.brief) room.brief = {};
+  room.brief.afterFilter = name;
+
+  // Apply live CSS filter to the displayed image
+  const ap = document.getElementById('after-panel');
+  const img = ap && ap.querySelector('img');
+  if (img) {
+    img.style.filter = REVELERE_FILTERS[name] || 'none';
+    img.style.transition = 'filter 0.35s ease';
+  }
+
+  // Update button active states
+  document.querySelectorAll('#filter-btns .filter-btn').forEach(btn => {
+    const active = btn.dataset.filter === name;
+    btn.style.background    = active ? 'var(--accent)' : 'white';
+    btn.style.color         = active ? 'white'         : 'var(--charcoal)';
+    btn.style.borderColor   = active ? 'var(--accent)' : 'var(--border)';
+    btn.style.fontWeight    = active ? '600'           : '400';
+  });
+
+  scheduleSave();
+}
+
+// Draw image through canvas with ctx.filter to bake CSS filter into pixel data.
+// Returns a new blob URL (or the original if filter is 'none'/missing).
+async function bakeFilterToImage(srcUrl, filterName) {
+  const filterStr = REVELERE_FILTERS[filterName];
+  if (!filterStr || filterStr === 'none') return srcUrl;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.filter = filterStr;
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(blob => resolve(URL.createObjectURL(blob)), 'image/jpeg', 0.92);
+    };
+    img.onerror = () => resolve(srcUrl);
+    img.src = srcUrl;
+  });
+}
+
+function renderFilterBar(room, view) {
+  const bar = document.getElementById('filter-bar');
+  const btns = document.getElementById('filter-btns');
+  if (!bar || !btns) return;
+  if (!view || !view.after) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  const saved = room.brief?.afterFilter || 'Natural';
+  btns.innerHTML = Object.keys(REVELERE_FILTERS).map(name => {
+    const active = name === saved;
+    return `<button class="filter-btn" data-filter="${name}" onclick="applyAfterFilter('${name}')"
+      style="background:${active?'var(--accent)':'white'};color:${active?'white':'var(--charcoal)'};
+      border:1px solid ${active?'var(--accent)':'var(--border)'};border-radius:var(--radius);
+      padding:4px 11px;font-size:11px;font-weight:${active?'600':'400'};cursor:pointer;
+      transition:all 0.18s;">${name}</button>`;
+  }).join('');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function acceptAfter(){
   const room = S.rooms[S.activeRoom];
   if (!room) return;
   if (!room.views) room.views = [{ src: room.src, empty: room.empty, after: room.after, emptyCanvas: room.emptyCanvas }];
   const view = room.views[S.activeView];
   if (!view || !view.after) { showToast('Generate a render first', true); return; }
-  if (S.activeView === 0) {
-    room.after = view.after;
-    if (!room.brief) room.brief = { preset: S.preset, coreEnabled: S.coreEnabled, moodLevel: S.moodLevel };
+
+  // Bake the active filter into the image so Design Book gets filtered pixels
+  const filterName = room.brief?.afterFilter;
+  const doAccept = async (finalUrl) => {
+    view.after = finalUrl;
+    if (S.activeView === 0) {
+      room.after = finalUrl;
+      if (!room.brief) room.brief = { preset: S.preset, coreEnabled: S.coreEnabled, moodLevel: S.moodLevel };
+    }
+    room.accepted = true;
+    const viewLabel = room.views.length > 1 ? ` View ${String.fromCharCode(65+S.activeView)}` : '';
+    showToast(`✓ ${room.name}${viewLabel} accepted`);
+    render3Panel();
+    scheduleSave();
+  };
+
+  if (filterName && filterName !== 'Natural') {
+    bakeFilterToImage(view.after, filterName).then(doAccept);
+  } else {
+    doAccept(view.after);
   }
-  room.accepted = true;
-  const viewLabel = room.views.length > 1 ? ` View ${String.fromCharCode(65+S.activeView)}` : '';
-  showToast(`✓ ${room.name}${viewLabel} accepted`);
-  render3Panel();
 }
 
 // Helper to get empty room display source
