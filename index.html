@@ -1497,8 +1497,8 @@ async function uploadToBlob(dataUrl, filename) {
 }
 
 // ── Cloud sync ────────────────────────────────────────────────────
-// Fetch the cloud manifest and fill in any null images / missing sourcing.
-// Runs silently on every page load so all devices stay up to date.
+// Fetch the cloud manifest — cloud always wins so all devices stay in sync.
+// Runs silently on every page load.
 async function syncFromManifest() {
   try {
     const r = await fetch('/api/manifest');
@@ -1507,27 +1507,70 @@ async function syncFromManifest() {
     if (!manifest || !manifest.rooms) return;
 
     let changed = false;
+
+    // Restore property name if cloud has one
+    if (manifest.propName && manifest.propName !== S.propName) {
+      S.propName = manifest.propName;
+      const inp = document.getElementById('prop-name-input');
+      if (inp) inp.value = S.propName;
+      const sb = document.getElementById('sb-name');
+      if (sb) sb.textContent = S.propName || 'Unnamed property';
+      changed = true;
+    }
+
+    // Add any rooms that exist in cloud but not locally
+    const localIds = new Set(S.rooms.map(r => String(r.id)));
+    Object.entries(manifest.rooms).forEach(([id, mRoom]) => {
+      if (!localIds.has(String(id)) && mRoom.name) {
+        S.rooms.push({
+          id: Number(id) || id,
+          name: mRoom.name || 'Room',
+          type: mRoom.type || 'Living Room',
+          src: mRoom.src || null,
+          empty: mRoom.empty || null,
+          after: mRoom.after || null,
+          brief: mRoom.brief || null,
+          aiLabeled: mRoom.aiLabeled || false,
+          included: mRoom.included !== false,
+          views: (mRoom.views || []).map(v => ({ src: v.src||null, empty: v.empty||null, after: v.after||null, emptyCanvas: null })),
+        });
+        changed = true;
+      }
+    });
+
+    // Update existing rooms — cloud CDN URLs always win over local base64
     S.rooms.forEach(room => {
       const mRoom = manifest.rooms[room.id] || manifest.rooms[String(room.id)];
-      if (mRoom) {
-        if (!room.src   && mRoom.src)   { room.src   = mRoom.src;   changed = true; }
-        if (!room.empty && mRoom.empty) { room.empty = mRoom.empty; changed = true; }
-        if (!room.after && mRoom.after) { room.after = mRoom.after; changed = true; }
-        // sync views
-        if (room.views && mRoom.views) {
-          room.views.forEach((view, i) => {
-            const mView = mRoom.views && mRoom.views[i];
-            if (mView) {
-              if (!view.src   && mView.src)   { view.src   = mView.src;   changed = true; }
-              if (!view.empty && mView.empty) { view.empty = mView.empty; changed = true; }
-              if (!view.after && mView.after) { view.after = mView.after; changed = true; }
-            }
-          });
-        }
+      if (!mRoom) return;
+
+      // Cloud wins if it has a CDN URL (starts with https)
+      const cloudWins = (local, cloud) => cloud && cloud.startsWith('https') && local !== cloud;
+      if (cloudWins(room.src,   mRoom.src))   { room.src   = mRoom.src;   changed = true; }
+      if (cloudWins(room.empty, mRoom.empty)) { room.empty = mRoom.empty; changed = true; }
+      if (cloudWins(room.after, mRoom.after)) { room.after = mRoom.after; changed = true; }
+
+      // Sync metadata — take cloud values
+      if (mRoom.name && mRoom.name !== room.name)     { room.name = mRoom.name; changed = true; }
+      if (mRoom.type && mRoom.type !== room.type)     { room.type = mRoom.type; changed = true; }
+      if (mRoom.brief && JSON.stringify(mRoom.brief) !== JSON.stringify(room.brief)) { room.brief = mRoom.brief; changed = true; }
+      if (mRoom.included !== undefined && mRoom.included !== room.included) { room.included = mRoom.included; changed = true; }
+
+      // Sync views
+      if (mRoom.views && mRoom.views.length > 0) {
+        if (!room.views) room.views = [];
+        mRoom.views.forEach((mView, i) => {
+          if (!room.views[i]) room.views[i] = { src: null, empty: null, after: null, emptyCanvas: null };
+          const v = room.views[i];
+          if (cloudWins(v.src,   mView.src))   { v.src   = mView.src;   changed = true; }
+          if (cloudWins(v.empty, mView.empty)) { v.empty = mView.empty; changed = true; }
+          if (cloudWins(v.after, mView.after)) { v.after = mView.after; changed = true; }
+        });
       }
-      // fill missing sourcing
+
+      // Sourcing — cloud wins if it has more items or local is empty
       const mSrc = manifest.sourcing && (manifest.sourcing[room.id] || manifest.sourcing[String(room.id)]);
-      if (mSrc && mSrc.length > 0 && (!S.sourcing[room.id] || S.sourcing[room.id].length === 0)) {
+      const lSrc = S.sourcing[room.id] || [];
+      if (mSrc && mSrc.length > lSrc.length) {
         S.sourcing[room.id] = mSrc;
         changed = true;
       }
@@ -1555,12 +1598,18 @@ async function syncToCloud() {
   if (btn) btn.textContent = '☁ Syncing…';
 
   try {
-    const manifest = { rooms: {}, sourcing: {} };
+    const manifest = { propName: S.propName, rooms: {}, sourcing: {} };
     const total = S.rooms.length;
     let done = 0;
 
     for (const room of S.rooms) {
-      const rData = { src: null, empty: null, after: null, views: [] };
+      const rData = {
+        src: null, empty: null, after: null, views: [],
+        name: room.name, type: room.type,
+        brief: room.brief || null,
+        aiLabeled: room.aiLabeled || false,
+        included: room.included !== false,
+      };
 
       // Upload each image field if it's still a base64 data URL
       if (room.src) {
