@@ -1480,43 +1480,54 @@ async function dataUrlToBlob(dataUrl, type='image/jpeg'){
 
 // Upload a data URL to Vercel Blob CDN so all devices can see it.
 // Falls back to the original data URL silently if the upload fails.
-// Compress a data URL to max 1920px wide, 80% JPEG quality, before uploading.
-// Keeps files well under 1MB so they clear Vercel's 4.5MB body limit.
+// Compress an image data URL to a guaranteed-small JPEG for blob upload.
+// Tries progressively smaller sizes until the base64 output is under 2MB
+// (well within Vercel's 4.5MB request body limit).
+// Returns null if the image can't be decoded (will be skipped on upload).
 async function compressForUpload(dataUrl) {
   if (!dataUrl || dataUrl.startsWith('http')) return dataUrl;
+  const STEPS = [
+    { maxDim: 1536, quality: 0.80 },
+    { maxDim: 1024, quality: 0.72 },
+    { maxDim: 768,  quality: 0.65 },
+    { maxDim: 512,  quality: 0.55 },
+  ];
+  const TARGET = 2_800_000; // 2.8MB base64 ≈ 2MB binary — safe below 4.5MB limit
+
   return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(null), 8000); // safety timeout
     const img = new Image();
     img.onload = () => {
-      const MAX = 1920;
-      let w = img.naturalWidth, h = img.naturalHeight;
-      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-      else if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(c.toDataURL('image/jpeg', 0.82));
+      clearTimeout(timer);
+      for (const { maxDim, quality } of STEPS) {
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else        { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        try {
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const out = c.toDataURL('image/jpeg', quality);
+          if (out.length <= TARGET) { resolve(out); return; }
+        } catch(e) { /* tainted canvas etc — try smaller */ }
+      }
+      resolve(null); // all attempts too large or failed
     };
-    img.onerror = () => resolve(dataUrl);
+    img.onerror = () => { clearTimeout(timer); resolve(null); };
     img.src = dataUrl;
   });
 }
 
 async function uploadToBlob(dataUrl, filename) {
-  if (!dataUrl || dataUrl.startsWith('http')) return dataUrl; // already a URL
+  if (!dataUrl || dataUrl.startsWith('http')) return dataUrl; // already a CDN URL
   try {
     const compressed = await compressForUpload(dataUrl);
-
-    // Primary path: direct browser → Vercel Blob CDN upload (no 4.5MB limit)
-    if (window._vercelBlobUpload) {
-      const bin = await fetch(compressed).then(r => r.blob());
-      const result = await window._vercelBlobUpload(`revelere/${filename}`, bin, {
-        access: 'public',
-        handleUploadUrl: '/api/blob-client-upload',
-      });
-      return result.url;
+    if (!compressed) {
+      console.warn(`Skipping upload for ${filename} — compression failed`);
+      return dataUrl; // will be stripped from manifest (cdnOnly filter)
     }
-
-    // Fallback: server-side upload (may 413 on large files)
     const r = await fetch('/api/blob-upload', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1530,7 +1541,7 @@ async function uploadToBlob(dataUrl, filename) {
     return url || dataUrl;
   } catch (e) {
     console.warn(`Blob upload failed (${filename}):`, e.message);
-    return dataUrl; // fall back to base64 — stripped from manifest
+    return dataUrl; // stripped from manifest, not a blocker
   }
 }
 
@@ -5908,10 +5919,5 @@ fetch('/api/notify', { method: 'POST' }).catch(() => {});
   </div>
 </div>
 
-<!-- Load Vercel Blob client uploader (ESM) for direct browser→CDN uploads -->
-<script type="module">
-  import { upload } from 'https://esm.sh/@vercel/blob@2.3.3/client';
-  window._vercelBlobUpload = upload;
-</script>
 </body>
 </html>
