@@ -1144,6 +1144,7 @@ const S = {
   signatureMoment: false,
   coreEnabled: true,
   moodLevel: 50,
+  _savedAt: 0,
   sourcing: {},            // { [roomId]: Item[] }
   activeSourcingRoom: null,
   pinterestRefs: [
@@ -1497,93 +1498,46 @@ async function uploadToBlob(dataUrl, filename) {
 }
 
 // ── Cloud sync ────────────────────────────────────────────────────
-// Fetch the cloud manifest — cloud always wins so all devices stay in sync.
+// Pull complete project state from cloud. Cloud wins if it's newer.
 // Runs silently on every page load.
 async function syncFromManifest() {
   try {
     const r = await fetch('/api/manifest');
     if (!r.ok) return;
     const manifest = await r.json();
-    if (!manifest || !manifest.rooms) return;
+    if (!manifest || !manifest._syncedAt) return; // no full state saved yet
 
-    let changed = false;
+    // Only replace local if cloud is newer
+    const localSavedAt = S._savedAt || 0;
+    if (manifest._syncedAt <= localSavedAt) return;
 
-    // Restore property name if cloud has one
-    if (manifest.propName && manifest.propName !== S.propName) {
-      S.propName = manifest.propName;
-      const inp = document.getElementById('prop-name-input');
-      if (inp) inp.value = S.propName;
-      const sb = document.getElementById('sb-name');
-      if (sb) sb.textContent = S.propName || 'Unnamed property';
-      changed = true;
-    }
+    // Restore full project state from cloud
+    S.propName          = manifest.propName          || S.propName;
+    S.preset            = manifest.preset            || S.preset;
+    S.signatureMoment   = manifest.signatureMoment   ?? S.signatureMoment;
+    S.coreEnabled       = manifest.coreEnabled       !== false;
+    S.moodLevel         = manifest.moodLevel         ?? S.moodLevel;
+    S.sourcing          = manifest.sourcing          || {};
+    S.pastedLinks       = manifest.pastedLinks       || [];
+    S.moodPhotos        = manifest.moodPhotos        || {};
+    S._savedAt          = manifest._syncedAt;
+    S.rooms = (manifest.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
 
-    // Add any rooms that exist in cloud but not locally
-    const localIds = new Set(S.rooms.map(r => String(r.id)));
-    Object.entries(manifest.rooms).forEach(([id, mRoom]) => {
-      if (!localIds.has(String(id)) && mRoom.name) {
-        S.rooms.push({
-          id: Number(id) || id,
-          name: mRoom.name || 'Room',
-          type: mRoom.type || 'Living Room',
-          src: mRoom.src || null,
-          empty: mRoom.empty || null,
-          after: mRoom.after || null,
-          brief: mRoom.brief || null,
-          aiLabeled: mRoom.aiLabeled || false,
-          included: mRoom.included !== false,
-          views: (mRoom.views || []).map(v => ({ src: v.src||null, empty: v.empty||null, after: v.after||null, emptyCanvas: null })),
-        });
-        changed = true;
-      }
-    });
+    // Update UI
+    const pni = document.getElementById('prop-name-input');
+    if (pni) pni.value = S.propName || '';
+    const sbn = document.getElementById('sb-name');
+    if (sbn) sbn.textContent = S.propName || 'Unnamed property';
 
-    // Update existing rooms — cloud CDN URLs always win over local base64
-    S.rooms.forEach(room => {
-      const mRoom = manifest.rooms[room.id] || manifest.rooms[String(room.id)];
-      if (!mRoom) return;
+    renderRooms();
+    renderEmpty();
+    renderDesign();
+    renderSourcing();
+    updateDashboard();
+    saveProject(); // persist to local IndexedDB
 
-      // Cloud wins if it has a CDN URL (starts with https)
-      const cloudWins = (local, cloud) => cloud && cloud.startsWith('https') && local !== cloud;
-      if (cloudWins(room.src,   mRoom.src))   { room.src   = mRoom.src;   changed = true; }
-      if (cloudWins(room.empty, mRoom.empty)) { room.empty = mRoom.empty; changed = true; }
-      if (cloudWins(room.after, mRoom.after)) { room.after = mRoom.after; changed = true; }
-
-      // Sync metadata — take cloud values
-      if (mRoom.name && mRoom.name !== room.name)     { room.name = mRoom.name; changed = true; }
-      if (mRoom.type && mRoom.type !== room.type)     { room.type = mRoom.type; changed = true; }
-      if (mRoom.brief && JSON.stringify(mRoom.brief) !== JSON.stringify(room.brief)) { room.brief = mRoom.brief; changed = true; }
-      if (mRoom.included !== undefined && mRoom.included !== room.included) { room.included = mRoom.included; changed = true; }
-
-      // Sync views
-      if (mRoom.views && mRoom.views.length > 0) {
-        if (!room.views) room.views = [];
-        mRoom.views.forEach((mView, i) => {
-          if (!room.views[i]) room.views[i] = { src: null, empty: null, after: null, emptyCanvas: null };
-          const v = room.views[i];
-          if (cloudWins(v.src,   mView.src))   { v.src   = mView.src;   changed = true; }
-          if (cloudWins(v.empty, mView.empty)) { v.empty = mView.empty; changed = true; }
-          if (cloudWins(v.after, mView.after)) { v.after = mView.after; changed = true; }
-        });
-      }
-
-      // Sourcing — cloud wins if it has more items or local is empty
-      const mSrc = manifest.sourcing && (manifest.sourcing[room.id] || manifest.sourcing[String(room.id)]);
-      const lSrc = S.sourcing[room.id] || [];
-      if (mSrc && mSrc.length > lSrc.length) {
-        S.sourcing[room.id] = mSrc;
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      renderRooms();
-      renderEmpty();
-      renderDesign();
-      renderSourcing();
-      updateDashboard();
-      scheduleSave();
-    }
+    const el = document.getElementById('save-status');
+    if (el) { el.textContent = '☁ Updated from cloud'; el.style.color = '#7A9E7E'; setTimeout(() => { el.textContent = ''; }, 3000); }
   } catch(e) {
     console.warn('Manifest sync skipped:', e.message);
   }
@@ -1598,63 +1552,58 @@ async function syncToCloud() {
   if (btn) btn.textContent = '☁ Syncing…';
 
   try {
-    const manifest = { propName: S.propName, rooms: {}, sourcing: {} };
     const total = S.rooms.length;
     let done = 0;
 
+    // Upload all base64 images to Blob (replaces base64 with CDN URLs in S)
     for (const room of S.rooms) {
-      const rData = {
-        src: null, empty: null, after: null, views: [],
-        name: room.name, type: room.type,
-        brief: room.brief || null,
-        aiLabeled: room.aiLabeled || false,
-        included: room.included !== false,
-      };
-
-      // Upload each image field if it's still a base64 data URL
-      if (room.src) {
-        room.src   = await uploadToBlob(room.src,   `${room.id}-original.jpg`);
-        rData.src  = room.src;
-      }
-      if (room.empty) {
-        room.empty  = await uploadToBlob(room.empty, `${room.id}-empty.png`);
-        rData.empty = room.empty;
-      }
-      if (room.after) {
-        room.after  = await uploadToBlob(room.after, `${room.id}-after.png`);
-        rData.after = room.after;
-      }
-
-      // Views
+      if (room.src   && room.src.startsWith('data:'))   room.src   = await uploadToBlob(room.src,   `${room.id}-original.jpg`);
+      if (room.empty && room.empty.startsWith('data:')) room.empty = await uploadToBlob(room.empty, `${room.id}-empty.png`);
+      if (room.after && room.after.startsWith('data:')) room.after = await uploadToBlob(room.after, `${room.id}-after.png`);
       if (room.views) {
         for (let i = 0; i < room.views.length; i++) {
-          const view = room.views[i];
-          const vData = { src: null, empty: null, after: null };
-          if (view.src)   { view.src   = await uploadToBlob(view.src,   `${room.id}-v${i}-original.jpg`); vData.src   = view.src; }
-          if (view.empty) { view.empty = await uploadToBlob(view.empty, `${room.id}-v${i}-empty.png`);    vData.empty = view.empty; }
-          if (view.after) { view.after = await uploadToBlob(view.after, `${room.id}-v${i}-after.png`);    vData.after = view.after; }
-          rData.views.push(vData);
+          const v = room.views[i];
+          if (v.src   && v.src.startsWith('data:'))   v.src   = await uploadToBlob(v.src,   `${room.id}-v${i}-original.jpg`);
+          if (v.empty && v.empty.startsWith('data:')) v.empty = await uploadToBlob(v.empty, `${room.id}-v${i}-empty.png`);
+          if (v.after && v.after.startsWith('data:')) v.after = await uploadToBlob(v.after, `${room.id}-v${i}-after.png`);
         }
       }
-
-      manifest.rooms[room.id] = rData;
       done++;
       if (btn) btn.textContent = `☁ ${done}/${total}…`;
     }
 
-    // Include sourcing data so other devices get sourced items too
-    Object.keys(S.sourcing).forEach(k => { manifest.sourcing[k] = S.sourcing[k]; });
+    // Build complete project snapshot (same shape as saveProject)
+    const now = Date.now();
+    const manifest = {
+      _syncedAt: now,
+      propName: S.propName,
+      preset: S.preset,
+      signatureMoment: S.signatureMoment,
+      coreEnabled: S.coreEnabled,
+      moodLevel: S.moodLevel,
+      sourcing: S.sourcing,
+      pastedLinks: S.pastedLinks || [],
+      moodPhotos: S.moodPhotos || {},
+      rooms: S.rooms.map(r => ({
+        id: r.id, name: r.name, type: r.type, aiLabeled: r.aiLabeled,
+        included: r.included !== false,
+        src: r.src || null, empty: r.empty || null, after: r.after || null,
+        brief: r.brief || null, emptyCanvas: null,
+        views: (r.views || []).map(v => ({ src: v.src||null, empty: v.empty||null, after: v.after||null, emptyCanvas: null })),
+      })),
+    };
 
-    // Save manifest to Vercel Blob
+    // Save to Vercel Blob
     const r = await fetch('/api/manifest', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(manifest),
     });
 
-    scheduleSave();
+    S._savedAt = now;
+    saveProject(); // persist CDN URLs to local IndexedDB
     if (r.ok) {
-      showToast('✓ Synced — images now visible on all devices');
+      showToast('✓ Synced to cloud — open on any device and refresh');
     } else {
       showToast('Sync failed — check Vercel Blob token is set', true);
     }
@@ -5791,6 +5740,7 @@ async function loadProject() {
     S.activeRoom        = saved.activeRoom        || 0;
     S.activeView        = saved.activeView        || 0;
     S.rooms             = (saved.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
+    S._savedAt          = saved._savedAt || 0;
 
     // Restore UI fields that reflect state
     const pni = document.getElementById('prop-name-input');
