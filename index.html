@@ -1480,13 +1480,35 @@ async function dataUrlToBlob(dataUrl, type='image/jpeg'){
 
 // Upload a data URL to Vercel Blob CDN so all devices can see it.
 // Falls back to the original data URL silently if the upload fails.
+// Compress a data URL to max 1920px wide, 80% JPEG quality, before uploading.
+// Keeps files well under 1MB so they clear Vercel's 4.5MB body limit.
+async function compressForUpload(dataUrl) {
+  if (!dataUrl || dataUrl.startsWith('http')) return dataUrl;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1920;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      else if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function uploadToBlob(dataUrl, filename) {
   if (!dataUrl || dataUrl.startsWith('http')) return dataUrl; // already a URL
   try {
+    const compressed = await compressForUpload(dataUrl);
     const r = await fetch('/api/blob-upload', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dataUrl, filename }),
+      body: JSON.stringify({ dataUrl: compressed, filename }),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
