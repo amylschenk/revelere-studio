@@ -1505,6 +1505,18 @@ async function uploadToBlob(dataUrl, filename) {
   if (!dataUrl || dataUrl.startsWith('http')) return dataUrl; // already a URL
   try {
     const compressed = await compressForUpload(dataUrl);
+
+    // Primary path: direct browser → Vercel Blob CDN upload (no 4.5MB limit)
+    if (window._vercelBlobUpload) {
+      const bin = await fetch(compressed).then(r => r.blob());
+      const result = await window._vercelBlobUpload(`revelere/${filename}`, bin, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-client-upload',
+      });
+      return result.url;
+    }
+
+    // Fallback: server-side upload (may 413 on large files)
     const r = await fetch('/api/blob-upload', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1518,7 +1530,7 @@ async function uploadToBlob(dataUrl, filename) {
     return url || dataUrl;
   } catch (e) {
     console.warn(`Blob upload failed (${filename}):`, e.message);
-    return dataUrl; // fall back to base64 — will be stripped from manifest
+    return dataUrl; // fall back to base64 — stripped from manifest
   }
 }
 
@@ -5895,5 +5907,11 @@ fetch('/api/notify', { method: 'POST' }).catch(() => {});
     </div>
   </div>
 </div>
+
+<!-- Load Vercel Blob client uploader (ESM) for direct browser→CDN uploads -->
+<script type="module">
+  import { upload } from 'https://esm.sh/@vercel/blob@2.3.3/client';
+  window._vercelBlobUpload = upload;
+</script>
 </body>
 </html>
