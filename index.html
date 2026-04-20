@@ -1488,12 +1488,15 @@ async function uploadToBlob(dataUrl, filename) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ dataUrl, filename }),
     });
-    if (!r.ok) return dataUrl;
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
     const { url } = await r.json();
     return url || dataUrl;
   } catch (e) {
-    console.warn('Blob upload skipped (offline or error):', e.message);
-    return dataUrl;
+    console.warn(`Blob upload failed (${filename}):`, e.message);
+    return dataUrl; // fall back to base64 — will be stripped from manifest
   }
 }
 
@@ -1572,7 +1575,9 @@ async function syncToCloud() {
       if (btn) btn.textContent = `☁ ${done}/${total}…`;
     }
 
-    // Build complete project snapshot (same shape as saveProject)
+    // Build complete project snapshot — strip any base64 that failed to upload
+    // (base64 images are too large for the manifest; CDN URLs only)
+    const cdnOnly = v => (v && v.startsWith('https')) ? v : null;
     const now = Date.now();
     const manifest = {
       _syncedAt: now,
@@ -1587,9 +1592,9 @@ async function syncToCloud() {
       rooms: S.rooms.map(r => ({
         id: r.id, name: r.name, type: r.type, aiLabeled: r.aiLabeled,
         included: r.included !== false,
-        src: r.src || null, empty: r.empty || null, after: r.after || null,
+        src: cdnOnly(r.src), empty: cdnOnly(r.empty), after: cdnOnly(r.after),
         brief: r.brief || null, emptyCanvas: null,
-        views: (r.views || []).map(v => ({ src: v.src||null, empty: v.empty||null, after: v.after||null, emptyCanvas: null })),
+        views: (r.views || []).map(v => ({ src: cdnOnly(v.src), empty: cdnOnly(v.empty), after: cdnOnly(v.after), emptyCanvas: null })),
       })),
     };
 

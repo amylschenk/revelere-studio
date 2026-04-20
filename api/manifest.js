@@ -1,6 +1,6 @@
 import { list, put } from '@vercel/blob';
 
-export const config = { api: { bodyParser: { sizeLimit: '8mb' } } };
+export const config = { api: { bodyParser: { sizeLimit: '50mb' } } };
 
 const MANIFEST_PATH = 'revelere/manifest.json';
 
