@@ -1001,6 +1001,10 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
               <button class="btn btn-ghost btn-sm" onclick="importSourcingCSV()" title="Import CSV">↑ Import CSV</button>
               <button class="btn btn-ghost btn-sm" onclick="exportSourcingCSV('room')" title="Export this room">↓ Room CSV</button>
               <button class="btn btn-ghost btn-sm" onclick="exportSourcingCSV('all')" title="Export all rooms">↓ All CSV</button>
+              <button id="budget-tracker-btn" onclick="pushBudgetTracker()" title="Push all accepted &amp; pending items to the shared Google Sheet"
+                style="font-size:11px;padding:4px 13px;background:#1B1B1B;color:#F5F2EE;border:1px solid #1B1B1B;border-radius:var(--radius);cursor:pointer;letter-spacing:0.04em;font-family:var(--font-body);transition:opacity 0.15s;">
+                ⊙ Design Budget Tracker
+              </button>
               <button class="btn btn-accent btn-sm" onclick="generateSourcing()" id="sourcing-gen-btn">✦ Generate sourcing</button>
             </div>
             <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="handleCSVImport(this)">
@@ -3495,6 +3499,46 @@ function exportSourcingCSV(scope) {
     : `${S.propName || 'revelere'}-${getCurrentRoom().name}-sourcing.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Design Budget Tracker — push to Google Sheet ───────────────
+async function pushBudgetTracker() {
+  const btn = document.getElementById('budget-tracker-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; btn.style.opacity = '0.6'; }
+
+  try {
+    const items = [];
+    for (const room of S.rooms) {
+      for (const item of (S.sourcing[room.id] || [])) {
+        if (item.status === 'rejected') continue;
+        items.push({
+          room:       room.name,
+          name:       item.name      || '',
+          price:      item.price     ?? null,
+          ordered:    item.ordered   || false,
+          orderDate:  item.orderDate || '',
+          actualCost: item.actualCost ?? '',
+        });
+      }
+    }
+
+    const res  = await fetch('/api/budget-tracker', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ items }),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      showToast('✓ Design Budget Tracker updated');
+    } else {
+      showToast('Budget Tracker error: ' + (data.error || 'unknown'), true);
+    }
+  } catch (e) {
+    showToast('Budget Tracker error: ' + e.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⊙ Design Budget Tracker'; btn.style.opacity = '1'; }
+  }
 }
 
 async function generateSourcing(){

@@ -1,12 +1,17 @@
 {
   "outputDirectory": ".",
   "functions": {
-    "api/openai-images.js":   { "maxDuration": 300 },
-    "api/openai-generate.js": { "maxDuration": 300 },
-    "api/anthropic.js":       { "maxDuration": 60  },
+    "api/openai-images.js":        { "maxDuration": 300 },
+    "api/openai-generate.js":      { "maxDuration": 300 },
+    "api/anthropic.js":            { "maxDuration": 60  },
     "api/blob-upload.js":          { "maxDuration": 60  },
     "api/blob-client-upload.js":   { "maxDuration": 60  },
-    "api/manifest.js":        { "maxDuration": 30  },
-    "api/share.js":           { "maxDuration": 120 }
-  }
+    "api/manifest.js":             { "maxDuration": 30  },
+    "api/share.js":                { "maxDuration": 120 },
+    "api/budget-tracker.js":       { "maxDuration": 60  }
+  },
+  "crons": [
+    { "path": "/api/budget-tracker", "schedule": "0 0 * * *"  },
+    { "path": "/api/budget-tracker", "schedule": "0 12 * * *" }
+  ]
 }

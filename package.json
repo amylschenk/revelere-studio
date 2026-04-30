@@ -16,6 +16,7 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
-    "@vercel/blob": "^2.3.3"
+    "@vercel/blob": "^2.3.3",
+    "googleapis": "^144.0.0"
   }
 }
