@@ -19,7 +19,7 @@ function getAuth() {
 
 // ── Write data + formatting ───────────────────────────────────────
 async function updateSheet(items) {
-  const sheetId = process.env.BUDGET_TRACKER_SHEET_ID;
+  const sheetId = (process.env.BUDGET_TRACKER_SHEET_ID || '').trim();
   if (!sheetId) throw new Error('BUDGET_TRACKER_SHEET_ID env var not set');
 
   const auth   = await getAuth();
