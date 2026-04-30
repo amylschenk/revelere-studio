@@ -3454,7 +3454,7 @@ function handleCSVImport(input) {
 
 // ── CSV Export ────────────────────────────────
 function exportSourcingCSV(scope) {
-  const headers = ['Room','Category','Name','Vendor','Est. Price','Commission %','Status','Link','Notes'];
+  const headers = ['Room','Category','Name','Vendor','Est. Price','Commission %','Status','Link','Notes','Ordered','Order Date','Actual Cost'];
   const rows = [headers];
 
   const addRoom = (room) => {
@@ -3470,6 +3470,9 @@ function exportSourcingCSV(scope) {
         item.status || 'pending',
         item.link || '',
         item.notes || '',
+        item.ordered ? 'Yes' : 'No',
+        item.orderDate || '',
+        item.actualCost != null ? item.actualCost : '',
       ].map(v => `"${String(v).replace(/"/g, '""')}"`));
     });
   };
