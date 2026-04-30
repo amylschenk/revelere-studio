@@ -494,6 +494,11 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 .proj-meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
 .proj-progress { margin-top: 9px; height: 2px; background: var(--ivory-dark); border-radius: 2px; }
 .proj-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+.proj-card-active { border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(166,124,82,0.18), var(--shadow) !important; }
+.proj-active-badge { position: absolute; bottom: 8px; left: 8px; background: var(--accent); color: white; font-size: 9px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 20px; }
+.proj-delete-btn { position: absolute; top: 7px; right: 7px; width: 22px; height: 22px; border-radius: 50%; background: rgba(27,27,27,0.55); border: none; color: rgba(255,255,255,0.85); font-size: 13px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s, background 0.15s; z-index: 2; }
+.proj-card:hover .proj-delete-btn { opacity: 1; }
+.proj-delete-btn:hover { background: rgba(184,92,58,0.85) !important; opacity: 1 !important; }
 
 /* INFOBOX */
 .infobox { background: rgba(166,124,82,0.07); border: 1px solid rgba(166,124,82,0.2); border-radius: var(--radius); padding: 12px 16px; font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
@@ -717,7 +722,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
       <button id="sync-btn" class="btn btn-ghost btn-sm" onclick="syncToCloud()" title="Upload all images to cloud so they appear on every device">☁ Sync</button>
       <button class="btn btn-ghost btn-sm" onclick="exportProject()" title="Save project file to transfer to another device">↓ Export</button>
       <label class="btn btn-ghost btn-sm" title="Load a project file exported from another device" style="cursor:pointer;">↑ Import<input type="file" accept=".rev,.json" style="display:none;" onchange="importProject(this)"></label>
-      <button class="btn btn-primary btn-sm" onclick="nav('upload')">+ New Property</button>
+      <button class="btn btn-primary btn-sm" onclick="createNewProperty()">+ New Property</button>
     </div>
   </div>
 
@@ -737,7 +742,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
     </div>
     <div class="row-between">
       <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);">Properties</div>
-      <button class="btn btn-ghost btn-sm" onclick="nav('upload')">+ Add property</button>
+      <button class="btn btn-ghost btn-sm" onclick="createNewProperty()">+ Add property</button>
     </div>
     <div class="projects-grid" id="dash-grid"></div>
   </div>
@@ -1013,10 +1018,11 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
             <table class="items-table" id="sourcing-table">
               <thead><tr>
                 <th style="width:3%"></th>
-                <th style="width:38%">Item</th>
-                <th>Price</th>
+                <th style="width:32%">Item</th>
+                <th>Est. Price</th>
                 <th>Comm</th>
                 <th>Link</th>
+                <th style="width:18%">Ordered</th>
                 <th>Action</th>
               </tr></thead>
               <tbody id="sourcing-tbody"></tbody>
@@ -1136,6 +1142,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
 <script>
 // ═══ STATE ═══════════════════════════════════
 const S = {
+  _propId: null,       // unique property ID — set on load/create
   propName: '',
   rooms: [],
   activeRoom: 0,
@@ -1546,52 +1553,141 @@ async function uploadToBlob(dataUrl, filename) {
 }
 
 // ── Cloud sync ────────────────────────────────────────────────────
-// Pull complete project state from cloud. Cloud wins if it's newer.
-// Runs silently on every page load.
+// Pull project state from cloud. Property-aware: the manifest belongs to a
+// specific property ID. Other devices discover and save it without blowing
+// away their own active property.
 async function syncFromManifest() {
   try {
     const r = await fetch('/api/manifest');
     if (!r.ok) return;
     const manifest = await r.json();
-    if (!manifest || !manifest._syncedAt) return; // no full state saved yet
+    if (!manifest || !manifest._syncedAt) return;
 
-    // Only replace local if cloud is newer
-    const localSavedAt = S._savedAt || 0;
-    if (manifest._syncedAt <= localSavedAt) return;
+    // ── Build list of all properties from cloud ───────────────────────
+    const db = await _openDB();
+    let anyNewOrUpdated = false;
 
-    // Restore full project state from cloud
-    S.propName          = manifest.propName          || S.propName;
-    S.preset            = manifest.preset            || S.preset;
-    S.signatureMoment   = manifest.signatureMoment   ?? S.signatureMoment;
-    S.coreEnabled       = manifest.coreEnabled       !== false;
-    S.moodLevel         = manifest.moodLevel         ?? S.moodLevel;
-    S.sourcing          = manifest.sourcing          || {};
-    S.pastedLinks       = manifest.pastedLinks       || [];
-    S.moodPhotos        = manifest.moodPhotos        || {};
-    S._savedAt          = manifest._syncedAt;
-    S.rooms = (manifest.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
+    const allCloudProps = Array.isArray(manifest.properties) ? [...manifest.properties] : [];
 
-    // Update UI
-    const pni = document.getElementById('prop-name-input');
-    if (pni) pni.value = S.propName || '';
-    const sbn = document.getElementById('sb-name');
-    if (sbn) sbn.textContent = S.propName || 'Unnamed property';
+    // NEW format: _propId + properties array (current code)
+    if (manifest._propId && !allCloudProps.find(p => p._propId === manifest._propId)) {
+      allCloudProps.push({
+        _propId: manifest._propId, _savedAt: manifest._syncedAt,
+        propName: manifest.propName, preset: manifest.preset,
+        signatureMoment: manifest.signatureMoment, coreEnabled: manifest.coreEnabled,
+        moodLevel: manifest.moodLevel, sourcing: manifest.sourcing,
+        pastedLinks: manifest.pastedLinks, moodPhotos: manifest.moodPhotos,
+        rooms: manifest.rooms,
+      });
+    }
 
-    renderRooms();
-    renderEmpty();
-    renderDesign();
-    renderSourcing();
-    updateDashboard();
-    saveProject(); // persist to local IndexedDB
+    // LEGACY format: no _propId, no properties array (old sync code)
+    // Match by property name so we don't create duplicates on devices that
+    // already have this property; create a new entry on devices that don't.
+    if (allCloudProps.length === 0 && manifest.propName && Array.isArray(manifest.rooms)) {
+      const existingByName = _propIndex.find(e => e.name === manifest.propName);
+      const legacyId = existingByName ? existingByName.id : ('cloud_' + manifest._syncedAt);
+      const localTime = existingByName ? (existingByName.updatedAt || 0) : 0;
+      if (manifest._syncedAt > localTime) {
+        allCloudProps.push({
+          _propId: legacyId, _savedAt: manifest._syncedAt,
+          propName: manifest.propName, preset: manifest.preset,
+          signatureMoment: manifest.signatureMoment, coreEnabled: manifest.coreEnabled,
+          moodLevel: manifest.moodLevel, sourcing: manifest.sourcing || {},
+          pastedLinks: manifest.pastedLinks || [], moodPhotos: manifest.moodPhotos || {},
+          rooms: manifest.rooms,
+        });
+      }
+    }
 
-    const el = document.getElementById('save-status');
-    if (el) { el.textContent = '☁ Updated from cloud'; el.style.color = '#7A9E7E'; setTimeout(() => { el.textContent = ''; }, 3000); }
+    for (const propData of allCloudProps) {
+      if (!propData._propId) continue;
+      const localEntry  = _propIndex.find(e => e.id === propData._propId);
+      const localTime   = localEntry ? (localEntry.updatedAt || 0) : 0;
+      if ((propData._savedAt || 0) <= localTime) continue; // already up to date locally
+
+      // Write this property's data into IDB
+      const toSave = {
+        ...propData,
+        activeSourcingRoom: null, activeRoom: 0, activeView: 0,
+        rooms: (propData.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false })),
+      };
+      const tx = db.transaction(_DB_STORE, 'readwrite');
+      tx.objectStore(_DB_STORE).put(toSave, 'prop_' + propData._propId);
+      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = e => rej(e.target.error); });
+
+      // Update or create the index entry
+      const thumb = (propData.rooms || []).reduce((t, rr) =>
+        t || (rr.after && rr.after.startsWith('https') ? rr.after : null)
+          || (rr.src   && rr.src.startsWith('https')   ? rr.src   : null), null);
+      if (localEntry) {
+        localEntry.name      = propData.propName || localEntry.name;
+        localEntry.updatedAt = propData._savedAt;
+        localEntry.roomCount = (propData.rooms || []).length;
+        if (thumb) localEntry.thumb = thumb;
+      } else {
+        _propIndex.push({ id: propData._propId, name: propData.propName || 'Unnamed Property', createdAt: propData._savedAt || Date.now(), updatedAt: propData._savedAt || Date.now(), roomCount: (propData.rooms || []).length, hasEmpty: false, hasAfter: false, hasSourcing: false, thumb: thumb || null });
+      }
+      anyNewOrUpdated = true;
+
+      // If this is the active property, refresh S live
+      if (propData._propId === S._propId) {
+        _deserializeState({ ...propData, _savedAt: propData._savedAt });
+        S._propId = propData._propId;
+        _updatePropertyUI();
+        renderRooms(); renderEmpty(); renderDesign(); renderSourcing();
+        const el = document.getElementById('save-status');
+        if (el) { el.textContent = '☁ Updated from cloud'; el.style.color = '#7A9E7E'; setTimeout(() => { el.textContent = ''; }, 3000); }
+      }
+    }
+
+    if (anyNewOrUpdated) {
+      await _savePropertyIndex();
+      renderDashboard();
+    }
   } catch(e) {
     console.warn('Manifest sync skipped:', e.message);
   }
 }
 
-// Upload all local images to Vercel Blob and save a manifest so every device sees them.
+// Read ALL properties from local IDB and return CDN-only snapshots.
+// This powers syncToCloud so every device gets every property in one push.
+async function _readAllPropertiesForSync() {
+  const cdnOnly = v => (typeof v === 'string' && v.startsWith('https')) ? v : null;
+  const result = [];
+  const db = await _openDB();
+  for (const entry of _propIndex) {
+    if (!entry.id) continue;
+    try {
+      const tx  = db.transaction(_DB_STORE, 'readonly');
+      const req = tx.objectStore(_DB_STORE).get('prop_' + entry.id);
+      const data = await new Promise((res, rej) => { req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error); });
+      if (!data) continue;
+      result.push({
+        _propId:        entry.id,
+        _savedAt:       data._savedAt || 0,
+        propName:       data.propName || '',
+        preset:         data.preset   || 'Revelere Core',
+        signatureMoment: data.signatureMoment || false,
+        coreEnabled:    data.coreEnabled !== false,
+        moodLevel:      data.moodLevel  ?? 50,
+        sourcing:       Object.fromEntries(Object.entries(data.sourcing || {}).map(([id, items]) => [id, (items||[]).map(i => ({...i, image: cdnOnly(i.image)||i.image}))])),
+        pastedLinks:    data.pastedLinks || [],
+        moodPhotos:     Object.fromEntries(Object.entries(data.moodPhotos||{}).map(([k,v])=>[k, cdnOnly(v)])),
+        rooms: (data.rooms || []).map(r => ({
+          id: r.id, name: r.name, type: r.type, aiLabeled: r.aiLabeled,
+          included: r.included !== false,
+          src:   cdnOnly(r.src),   empty: cdnOnly(r.empty), after: cdnOnly(r.after),
+          brief: r.brief || null,  emptyCanvas: null,
+          views: (r.views||[]).map(v => ({ src: cdnOnly(v.src), empty: cdnOnly(v.empty), after: cdnOnly(v.after), emptyCanvas: null })),
+        })),
+      });
+    } catch(e) { /* skip unreadable property */ }
+  }
+  return result;
+}
+
+// Sync ALL properties to the cloud in one push.
 let _syncing = false;
 async function syncToCloud() {
   if (_syncing) return;
@@ -1600,50 +1696,36 @@ async function syncToCloud() {
   if (btn) btn.textContent = '☁ Syncing…';
 
   try {
-    const total = S.rooms.length;
-    let done = 0;
-
-    // Upload all base64 images to Blob (replaces base64 with CDN URLs in S)
-    for (const room of S.rooms) {
-      if (room.src   && room.src.startsWith('data:'))   room.src   = await uploadToBlob(room.src,   `${room.id}-original.jpg`);
-      if (room.empty && room.empty.startsWith('data:')) room.empty = await uploadToBlob(room.empty, `${room.id}-empty.png`);
-      if (room.after && room.after.startsWith('data:')) room.after = await uploadToBlob(room.after, `${room.id}-after.png`);
-      if (room.views) {
-        for (let i = 0; i < room.views.length; i++) {
-          const v = room.views[i];
-          if (v.src   && v.src.startsWith('data:'))   v.src   = await uploadToBlob(v.src,   `${room.id}-v${i}-original.jpg`);
-          if (v.empty && v.empty.startsWith('data:')) v.empty = await uploadToBlob(v.empty, `${room.id}-v${i}-empty.png`);
-          if (v.after && v.after.startsWith('data:')) v.after = await uploadToBlob(v.after, `${room.id}-v${i}-after.png`);
-        }
-      }
-      done++;
-      if (btn) btn.textContent = `☁ ${done}/${total}…`;
-    }
-
-    // Build complete project snapshot — strip any base64 that failed to upload
-    // (base64 images are too large for the manifest; CDN URLs only)
-    const cdnOnly = v => (v && v.startsWith('https')) ? v : null;
     const now = Date.now();
+    const cdnOnly = v => (typeof v === 'string' && v.startsWith('https')) ? v : null;
+
+    // Collect ALL properties so every device gets every property
+    const allProperties = await _readAllPropertiesForSync();
+
+    // Active property snapshot (kept at top-level for backwards compat)
     const manifest = {
-      _syncedAt: now,
-      propName: S.propName,
-      preset: S.preset,
+      _syncedAt:  now,
+      _propId:    S._propId,
+      _propIndex: _propIndex,
+      properties: allProperties,          // ← full data for every property
+      // Active property fields (top-level, for any older clients)
+      propName:       S.propName,
+      preset:         S.preset,
       signatureMoment: S.signatureMoment,
-      coreEnabled: S.coreEnabled,
-      moodLevel: S.moodLevel,
-      sourcing: S.sourcing,
-      pastedLinks: S.pastedLinks || [],
-      moodPhotos: S.moodPhotos || {},
+      coreEnabled:    S.coreEnabled,
+      moodLevel:      S.moodLevel,
+      sourcing: Object.fromEntries(Object.entries(S.sourcing||{}).map(([id,items])=>[id,(items||[]).map(i=>({...i,image:cdnOnly(i.image)||i.image}))])),
+      pastedLinks:    S.pastedLinks || [],
+      moodPhotos:     Object.fromEntries(Object.entries(S.moodPhotos||{}).map(([k,v])=>[k,cdnOnly(v)])),
       rooms: S.rooms.map(r => ({
         id: r.id, name: r.name, type: r.type, aiLabeled: r.aiLabeled,
         included: r.included !== false,
         src: cdnOnly(r.src), empty: cdnOnly(r.empty), after: cdnOnly(r.after),
         brief: r.brief || null, emptyCanvas: null,
-        views: (r.views || []).map(v => ({ src: cdnOnly(v.src), empty: cdnOnly(v.empty), after: cdnOnly(v.after), emptyCanvas: null })),
+        views: (r.views||[]).map(v=>({ src: cdnOnly(v.src), empty: cdnOnly(v.empty), after: cdnOnly(v.after), emptyCanvas: null })),
       })),
     };
 
-    // Save to Vercel Blob
     const r = await fetch('/api/manifest', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1651,15 +1733,16 @@ async function syncToCloud() {
     });
 
     S._savedAt = now;
-    saveProject(); // persist CDN URLs to local IndexedDB
+    saveProject();
     if (r.ok) {
-      showToast('✓ Synced to cloud — open on any device and refresh');
+      showToast(`✓ Synced ${allProperties.length} propert${allProperties.length !== 1 ? 'ies' : 'y'} to cloud`);
     } else {
-      showToast('Sync failed — check Vercel Blob token is set', true);
+      const errText = await r.text().catch(() => r.status);
+      showToast(`Sync failed (${r.status}) — ${errText}`.slice(0, 80), true);
     }
   } catch(e) {
     console.error('syncToCloud error:', e);
-    showToast('Sync error: ' + e.message, true);
+    showToast('Sync error: ' + (e.message || String(e)).slice(0, 80), true);
   } finally {
     _syncing = false;
     if (btn) btn.textContent = '☁ Sync';
@@ -3371,7 +3454,7 @@ function handleCSVImport(input) {
 
 // ── CSV Export ────────────────────────────────
 function exportSourcingCSV(scope) {
-  const headers = ['Room','Category','Name','Vendor','Price','Commission %','Status','Link','Notes'];
+  const headers = ['Room','Category','Name','Vendor','Est. Price','Commission %','Status','Link','Notes'];
   const rows = [headers];
 
   const addRoom = (room) => {
@@ -3565,6 +3648,27 @@ function renderSourcing(){
             : getFallbackLinkLabel(room.id, item.id)
           }
         </td>
+        <td style="min-width:160px;">
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:500;color:${item.ordered?'#4A7A50':'var(--muted)'};">
+              <input type="checkbox" ${item.ordered?'checked':''} onchange="updateItemOrder('${room.id}','${item.id}','ordered',this.checked)"
+                style="width:14px;height:14px;accent-color:#4A7A50;cursor:pointer;">
+              ${item.ordered ? 'Ordered' : 'Not ordered'}
+            </label>
+            <div style="display:flex;flex-direction:column;gap:4px;${item.ordered?'':'opacity:0.4;pointer-events:none;'}">
+              <div style="display:flex;align-items:center;gap:5px;">
+                <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);width:32px;">Date</span>
+                <input type="date" value="${item.orderDate||''}" onchange="updateItemOrder('${room.id}','${item.id}','orderDate',this.value)"
+                  style="font-size:11px;border:1px solid var(--border);border-radius:3px;padding:2px 5px;background:var(--ivory);color:var(--charcoal);width:120px;">
+              </div>
+              <div style="display:flex;align-items:center;gap:5px;">
+                <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);width:32px;">Cost</span>
+                <input type="number" min="0" step="0.01" placeholder="Actual $" value="${item.actualCost!=null?item.actualCost:''}" onchange="updateItemOrder('${room.id}','${item.id}','actualCost',parseFloat(this.value)||null)"
+                  style="font-size:11px;border:1px solid var(--border);border-radius:3px;padding:2px 5px;background:var(--ivory);color:var(--charcoal);width:90px;">
+              </div>
+            </div>
+          </div>
+        </td>
         <td>
           <div style="display:flex;gap:4px;flex-direction:column;">
             <div style="display:flex;gap:4px;">
@@ -3642,6 +3746,15 @@ function dropRoomItem(roomId, itemId){
   S.sourcing[roomId] = S.sourcing[roomId].filter(x => x.id !== itemId);
   renderSourcing();
   updateBudget();
+}
+
+function updateItemOrder(roomId, itemId, field, value){
+  const items = S.sourcing[roomId];
+  if (!items) return;
+  const item = items.find(x => x.id === itemId);
+  if (!item) return;
+  item[field] = value;
+  renderSourcing();
 }
 
 // ── Replacement suggestions ───────────────────
@@ -5148,42 +5261,56 @@ function exportCanva() {
 }
 
 // ═══ DASHBOARD ═══════════════════════════════
-function updateDashboard(){
-  document.getElementById('stat-props').textContent=S.propName||S.rooms.length?1:0;
-  document.getElementById('stat-rooms').textContent=S.rooms.length;
-  document.getElementById('stat-empty').textContent=S.rooms.filter(r=>r.empty||r.emptyCanvas).length;
+function updateDashboard() {
+  const totalProps = _propIndex.length;
+  const totalRooms = _propIndex.reduce((s, p) => s + (p.roomCount || 0), 0);
+  document.getElementById('stat-props').textContent = totalProps;
+  document.getElementById('stat-rooms').textContent = totalRooms;
+  document.getElementById('stat-empty').textContent = S.rooms.filter(r => r.empty || r.emptyCanvas).length;
 }
 
-function renderDashboard(){
+function renderDashboard() {
   updateDashboard();
-  const grid=document.getElementById('dash-grid');
-  const sub=document.getElementById('dash-sub');
-  const titleEl=document.getElementById('dash-title');
-  if(titleEl){
-    titleEl.innerHTML=S.propName
-      ? `${S.propName}<br><em>Design Studio</em>`
-      : `Revelere<br><em>Design Studio</em>`;
-  }
-  if(!S.propName&&!S.rooms.length){
-    sub.textContent='Upload your first property to get started.';
-    grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1;padding:38px 20px;">
+  const grid    = document.getElementById('dash-grid');
+  const sub     = document.getElementById('dash-sub');
+  const titleEl = document.getElementById('dash-title');
+  if (titleEl) titleEl.innerHTML = `Revelere<br><em>Design Studio</em>`;
+
+  if (!_propIndex.length) {
+    sub.textContent = 'Create your first property to get started.';
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:38px 20px;">
       <div class="empty-icon">🏡</div><div class="empty-title">No properties yet</div>
       <div class="empty-sub">Start by uploading photos from your first property.</div>
-      <button class="btn btn-primary" onclick="nav('upload')">Upload first property</button>
-    </div>`;return;
+      <button class="btn btn-primary" onclick="createNewProperty()">Upload first property</button>
+    </div>`;
+    return;
   }
-  const steps=[S.rooms.length>0,S.rooms.some(r=>r.empty||r.emptyCanvas),S.rooms.some(r=>r.after),Object.values(S.sourcing).some(items=>items.some(x=>x.on))];
-  const pct=Math.round(steps.filter(Boolean).length/4*100);
-  sub.textContent=`${S.rooms.length} room${S.rooms.length!==1?'s':''} uploaded${S.rooms.filter(r=>r.empty||r.emptyCanvas).length?' · '+S.rooms.filter(r=>r.empty||r.emptyCanvas).length+' empty rooms generated':''}.`;
-  const thumb=S.rooms[0];
-  grid.innerHTML=`<div class="proj-card" onclick="nav('property-summary')">
-    <div class="proj-thumb">${thumb?`<img src="${thumb.src}" alt="thumb">`:'<div style="font-size:30px;opacity:0.5;">🏡</div>'}
-      <div class="proj-dot ${pct===100?'done':''}"></div></div>
-    <div class="proj-info">
-      <div class="proj-name">${S.propName||'Unnamed Property'}</div>
-      <div class="proj-meta"><span class="chip chip-active"><span class="chip-dot"></span>In progress</span><span>${S.rooms.length} rooms</span></div>
-      <div class="proj-progress"><div class="proj-fill" style="width:${pct}%"></div></div>
-    </div></div>`;
+
+  const totalRooms = _propIndex.reduce((s, p) => s + (p.roomCount || 0), 0);
+  sub.textContent = `${_propIndex.length} propert${_propIndex.length !== 1 ? 'ies' : 'y'} · ${totalRooms} total rooms`;
+
+  grid.innerHTML = _propIndex.map(prop => {
+    const isActive = prop.id === S._propId;
+    const thumb = prop.thumb;
+    const steps = [prop.roomCount > 0, prop.hasEmpty, prop.hasAfter, prop.hasSourcing];
+    const pct = Math.round(steps.filter(Boolean).length / 4 * 100);
+    return `<div class="proj-card${isActive ? ' proj-card-active' : ''}" onclick="openProperty('${prop.id}')">
+      <div class="proj-thumb">
+        ${thumb ? `<img src="${thumb}" alt="${prop.name}">` : '<div style="font-size:30px;opacity:0.5;">🏡</div>'}
+        <div class="proj-dot"></div>
+        ${isActive ? '<div class="proj-active-badge">Active</div>' : ''}
+        <button class="proj-delete-btn" title="Delete property" onclick="event.stopPropagation();deleteProperty('${prop.id}','${(prop.name||'').replace(/'/g,"\\'")}')">×</button>
+      </div>
+      <div class="proj-info">
+        <div class="proj-name">${prop.name || 'Unnamed Property'}</div>
+        <div class="proj-meta">
+          <span class="chip ${isActive ? 'chip-active' : 'chip-pending'}"><span class="chip-dot"></span>${isActive ? 'Open' : 'Saved'}</span>
+          <span>${prop.roomCount || 0} room${prop.roomCount !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="proj-progress"><div class="proj-fill" style="width:${pct}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function navToRoom(idx, page) {
@@ -5627,11 +5754,12 @@ async function buildLookbook() {
   showToast(`✓ Lookbook built — ${pages.length} pages`);
 }
 
-// ═══ PERSISTENCE (IndexedDB) ═════════════════
-// Saves the full project state so work survives browser close/refresh.
-// localStorage is too small for base64 images — IndexedDB handles 100MB+.
+// ═══ PERSISTENCE (IndexedDB — Multi-Property) ════════════════
+// Each property is stored under its own IDB key: 'prop_<id>'
+// A property index at '__prop_index' tracks all properties.
+// The old 'current' key (single-property era) is migrated on first load.
 
-const _DB_NAME = 'revelere_studio_v1';
+const _DB_NAME  = 'revelere_studio_v1';
 const _DB_STORE = 'project';
 
 function _openDB() {
@@ -5647,13 +5775,34 @@ function _openDB() {
 }
 
 let _saveTimer = null;
-function scheduleSave() {
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(saveProject, 1200);
+function scheduleSave() { clearTimeout(_saveTimer); _saveTimer = setTimeout(saveProject, 1200); }
+
+// ── Property index (in-memory cache + IDB) ────
+let _propIndex = [];   // [{ id, name, createdAt, updatedAt, roomCount, thumb, hasEmpty, hasAfter, hasSourcing }]
+
+async function _loadPropertyIndex() {
+  try {
+    const db = await _openDB();
+    const tx = db.transaction(_DB_STORE, 'readonly');
+    const req = tx.objectStore(_DB_STORE).get('__prop_index');
+    const result = await new Promise((res, rej) => { req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error); });
+    _propIndex = result || [];
+  } catch(e) { _propIndex = []; }
 }
 
-function exportProject() {
-  const data = {
+async function _savePropertyIndex() {
+  try {
+    const db = await _openDB();
+    const tx = db.transaction(_DB_STORE, 'readwrite');
+    tx.objectStore(_DB_STORE).put(_propIndex, '__prop_index');
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = e => rej(e.target.error); });
+  } catch(e) { console.warn('Revelere index save error:', e); }
+}
+
+// ── State serializer / deserializer ──────────
+function _serializeState() {
+  return {
+    _propId: S._propId,
     propName: S.propName,
     preset: S.preset,
     signatureMoment: S.signatureMoment,
@@ -5679,8 +5828,161 @@ function exportProject() {
         emptyCanvas: null,
       }))
     })),
-    _exportedAt: Date.now()
+    _savedAt: Date.now()
   };
+}
+
+function _deserializeState(saved) {
+  S._propId           = saved._propId            || S._propId;
+  S.propName          = saved.propName           || '';
+  S.preset            = saved.preset             || 'Revelere Core';
+  S.signatureMoment   = saved.signatureMoment    || false;
+  S.coreEnabled       = saved.coreEnabled        !== false;
+  S.moodLevel         = saved.moodLevel          ?? 50;
+  S.sourcing          = saved.sourcing           || {};
+  S.activeSourcingRoom= saved.activeSourcingRoom || null;
+  S.pastedLinks       = saved.pastedLinks        || [];
+  S.moodPhotos        = saved.moodPhotos         || {};
+  S.activeRoom        = saved.activeRoom         || 0;
+  S.activeView        = saved.activeView         || 0;
+  S.rooms             = (saved.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
+  S._savedAt          = saved._savedAt           || 0;
+}
+
+function _updatePropertyUI() {
+  const pni = document.getElementById('prop-name-input');
+  if (pni) pni.value = S.propName || '';
+  const sbn = document.getElementById('sb-name');
+  if (sbn) sbn.textContent = S.propName || 'Unnamed property';
+}
+
+// ── Save active property ──────────────────────
+async function saveProject() {
+  if (!S._propId) return;
+  try {
+    const data = _serializeState();
+    const db = await _openDB();
+    const tx = db.transaction(_DB_STORE, 'readwrite');
+    tx.objectStore(_DB_STORE).put(data, 'prop_' + S._propId);
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = e => rej(e.target.error); });
+
+    // Update index entry for this property
+    let entry = _propIndex.find(e => e.id === S._propId);
+    const thumb = S.rooms.reduce((t, r) => t || (r.after && r.after.startsWith('https') ? r.after : null) || (r.src && r.src.startsWith('https') ? r.src : null), null);
+    const hasSourcing = Object.values(S.sourcing).some(items => items.some(x => x.status === 'accepted'));
+    if (entry) {
+      entry.name       = S.propName || entry.name;
+      entry.updatedAt  = data._savedAt;
+      entry.roomCount  = S.rooms.length;
+      entry.hasEmpty   = S.rooms.some(r => r.empty || r.emptyCanvas);
+      entry.hasAfter   = S.rooms.some(r => r.after);
+      entry.hasSourcing= hasSourcing;
+      if (thumb) entry.thumb = thumb;
+    } else {
+      _propIndex.push({ id: S._propId, name: S.propName || 'Unnamed Property', createdAt: data._savedAt, updatedAt: data._savedAt, roomCount: S.rooms.length, hasEmpty: false, hasAfter: false, hasSourcing: false, thumb: thumb || null });
+    }
+    await _savePropertyIndex();
+
+    const el = document.getElementById('save-status');
+    if (el) { el.textContent = '✓ Saved'; el.style.color = '#7A9E7E'; setTimeout(() => { el.textContent = ''; }, 2500); }
+  } catch(e) { console.warn('Revelere save error:', e); }
+}
+
+// ── Load a property by ID into S ─────────────
+async function loadProjectById(propId) {
+  try {
+    const db = await _openDB();
+    const tx = db.transaction(_DB_STORE, 'readonly');
+    const req = tx.objectStore(_DB_STORE).get('prop_' + propId);
+    const saved = await new Promise((res, rej) => { req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error); });
+    if (!saved) return false;
+    _deserializeState(saved);
+    S._propId = propId;
+    _updatePropertyUI();
+    const el = document.getElementById('save-status');
+    if (el && saved._savedAt) { const ago = Math.round((Date.now() - saved._savedAt) / 60000); el.textContent = ago < 2 ? 'Restored' : `Restored · ${ago}m ago`; el.style.color = 'var(--muted)'; setTimeout(() => { el.textContent = ''; }, 4000); }
+    return true;
+  } catch(e) { console.warn('Revelere load error:', e); return false; }
+}
+
+// ── Open a property from the dashboard ───────
+async function openProperty(propId) {
+  if (propId === S._propId) { nav('property-summary'); return; }
+  await saveProject();
+  const ok = await loadProjectById(propId);
+  if (!ok) { showToast('Could not open property', true); return; }
+  renderDashboard();
+  renderRooms();
+  nav('property-summary');
+  showToast(`✓ ${S.propName || 'Property'} opened — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''}`);
+}
+
+// ── Create a completely new blank property ────
+async function createNewProperty() {
+  await saveProject();  // persist whatever is open now
+  const newId = 'prop_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  S._propId            = newId;
+  S.propName           = '';
+  S.preset             = 'Revelere Core';
+  S.signatureMoment    = false;
+  S.coreEnabled        = true;
+  S.moodLevel          = 50;
+  S.sourcing           = {};
+  S.activeSourcingRoom = null;
+  S.pastedLinks        = [];
+  S.moodPhotos         = {};
+  S.activeRoom         = 0;
+  S.activeView         = 0;
+  S.rooms              = [];
+  S._savedAt           = 0;
+  _updatePropertyUI();
+  _propIndex.push({ id: newId, name: '', createdAt: Date.now(), updatedAt: Date.now(), roomCount: 0, hasEmpty: false, hasAfter: false, hasSourcing: false, thumb: null });
+  await _savePropertyIndex();
+  await saveProject();
+  renderDashboard();
+  renderRooms();
+  nav('upload');
+  showToast('✓ New property created — give it a name and upload your first photo');
+}
+
+// ── Delete a property ────────────────────────
+async function deleteProperty(propId, propName) {
+  const label = propName || 'this property';
+  if (!confirm(`Delete "${label}"?\n\nThis removes it from your dashboard. Any images already uploaded to the cloud will remain in Vercel Blob storage but won't be accessible from the app.`)) return;
+
+  // If deleting the active property, switch to another one first
+  if (propId === S._propId) {
+    const others = _propIndex.filter(e => e.id !== propId);
+    if (others.length) {
+      await loadProjectById(others[0].id);
+      renderRooms();
+    } else {
+      // No other properties — reset to empty state
+      S._propId = null; S.propName = ''; S.rooms = []; S.sourcing = {};
+      _updatePropertyUI(); renderRooms();
+    }
+  }
+
+  // Remove from index
+  const idx = _propIndex.findIndex(e => e.id === propId);
+  if (idx !== -1) _propIndex.splice(idx, 1);
+  await _savePropertyIndex();
+
+  // Delete IDB record
+  try {
+    const db = await _openDB();
+    const tx = db.transaction(_DB_STORE, 'readwrite');
+    tx.objectStore(_DB_STORE).delete('prop_' + propId);
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = e => rej(e.target.error); });
+  } catch(e) { console.warn('IDB delete error:', e); }
+
+  renderDashboard();
+  showToast(`✓ "${label}" removed`);
+}
+
+// ── Export / Import ───────────────────────────
+function exportProject() {
+  const data = { ..._serializeState(), _exportedAt: Date.now() };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -5698,25 +6000,18 @@ function importProject(input) {
   reader.onload = async e => {
     try {
       const saved = JSON.parse(e.target.result);
-      S.propName          = saved.propName          || '';
-      S.preset            = saved.preset            || 'Revelere Core';
-      S.signatureMoment   = saved.signatureMoment   || false;
-      S.coreEnabled       = saved.coreEnabled       !== false;
-      S.moodLevel         = saved.moodLevel         ?? 50;
-      S.sourcing          = saved.sourcing          || {};
-      S.activeSourcingRoom= saved.activeSourcingRoom|| null;
-      S.pastedLinks       = saved.pastedLinks       || [];
-      S.moodPhotos        = saved.moodPhotos        || {};
-      S.activeRoom        = saved.activeRoom        || 0;
-      S.activeView        = saved.activeView        || 0;
-      S.rooms             = (saved.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
-      const pni = document.getElementById('prop-name-input');
-      if (pni && S.propName) pni.value = S.propName;
-      const sbn = document.getElementById('sb-name');
-      if (sbn) sbn.textContent = S.propName || 'Unnamed property';
+      // Always import as a NEW property — never overwrite existing data
+      await saveProject();
+      const newId = 'prop_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      saved._propId = newId;
+      _deserializeState(saved);
+      S._propId = newId;
+      _updatePropertyUI();
       await saveProject();
       renderDashboard();
-      showToast(`✓ Project imported — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''} loaded`);
+      renderRooms();
+      nav('property-summary');
+      showToast(`✓ Imported "${S.propName || 'Property'}" — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''} loaded`);
     } catch(err) {
       showToast('Import failed — file may be corrupted', true);
     }
@@ -5725,93 +6020,8 @@ function importProject(input) {
   reader.readAsText(file);
 }
 
-async function saveProject() {
-  try {
-    const db = await _openDB();
-    // Serialize — convert any canvas elements to dataURLs
-    const data = {
-      propName: S.propName,
-      preset: S.preset,
-      signatureMoment: S.signatureMoment,
-      coreEnabled: S.coreEnabled,
-      moodLevel: S.moodLevel,
-      sourcing: S.sourcing,
-      activeSourcingRoom: S.activeSourcingRoom,
-      pastedLinks: S.pastedLinks,
-      moodPhotos: S.moodPhotos,
-      activeRoom: S.activeRoom,
-      activeView: S.activeView,
-      rooms: S.rooms.map(r => ({
-        id: r.id, name: r.name, type: r.type, aiLabeled: r.aiLabeled,
-        src:   r.src   || null,
-        empty: r.empty || (r.emptyCanvas ? r.emptyCanvas.toDataURL() : null),
-        after: r.after || null,
-        brief: r.brief || null,
-        emptyCanvas: null,
-        views: (r.views || []).map(v => ({
-          src:   v.src   || null,
-          empty: v.empty || (v.emptyCanvas ? v.emptyCanvas.toDataURL() : null),
-          after: v.after || null,
-          emptyCanvas: null,
-        }))
-      })),
-      _savedAt: Date.now()
-    };
-    const tx = db.transaction(_DB_STORE, 'readwrite');
-    tx.objectStore(_DB_STORE).put(data, 'current');
-    tx.oncomplete = () => {
-      const el = document.getElementById('save-status');
-      if (el) {
-        el.textContent = '✓ Saved';
-        el.style.color = '#7A9E7E';
-        setTimeout(() => { el.textContent = ''; }, 2500);
-      }
-    };
-  } catch(e) { console.warn('Revelere save error:', e); }
-}
-
-async function loadProject() {
-  try {
-    const db = await _openDB();
-    const tx = db.transaction(_DB_STORE, 'readonly');
-    const req = tx.objectStore(_DB_STORE).get('current');
-    const saved = await new Promise((res, rej) => { req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error); });
-    if (!saved) return false;
-
-    S.propName          = saved.propName          || '';
-    S.preset            = saved.preset            || 'Revelere Core';
-    S.signatureMoment   = saved.signatureMoment   || false;
-    S.coreEnabled       = saved.coreEnabled       !== false;
-    S.moodLevel         = saved.moodLevel         ?? 50;
-    S.sourcing          = saved.sourcing          || {};
-    S.activeSourcingRoom= saved.activeSourcingRoom|| null;
-    S.pastedLinks       = saved.pastedLinks       || [];
-    S.moodPhotos        = saved.moodPhotos        || {};
-    S.activeRoom        = saved.activeRoom        || 0;
-    S.activeView        = saved.activeView        || 0;
-    S.rooms             = (saved.rooms || []).map(r => ({ ...r, emptyCanvas: null, processing: false }));
-    S._savedAt          = saved._savedAt || 0;
-
-    // Restore UI fields that reflect state
-    const pni = document.getElementById('prop-name-input');
-    if (pni && S.propName) pni.value = S.propName;
-    const sbn = document.getElementById('sb-name');
-    if (sbn) sbn.textContent = S.propName || 'Unnamed property';
-
-    const el = document.getElementById('save-status');
-    if (el && saved._savedAt) {
-      const ago = Math.round((Date.now() - saved._savedAt) / 60000);
-      el.textContent = ago < 2 ? 'Restored' : `Restored · ${ago}m ago`;
-      el.style.color = 'var(--muted)';
-      setTimeout(() => { el.textContent = ''; }, 4000);
-    }
-    return true;
-  } catch(e) { console.warn('Revelere load error:', e); return false; }
-}
-
 // ═══ SEED DATA ════════════════════════════════
-// Hardcoded San Diego project — loads on first visit to any new device.
-// IDB data always takes priority; this is the fallback for fresh browsers.
+// Hardcoded San Diego project — used only on devices with no prior data.
 const SEED_DATA = {
   propName: 'San Diego',
   preset: 'Coastal',
@@ -5839,37 +6049,74 @@ const SEED_DATA = {
 };
 
 // ═══ INIT ═════════════════════════════════════
-try {
-  loadProject().then(restored => {
-    if (!restored) {
-      // First visit on this device — seed the San Diego project
-      S.propName        = SEED_DATA.propName;
-      S.preset          = SEED_DATA.preset;
-      S.signatureMoment = SEED_DATA.signatureMoment;
-      S.coreEnabled     = SEED_DATA.coreEnabled;
-      S.moodLevel       = SEED_DATA.moodLevel;
-      S.rooms           = SEED_DATA.rooms.map(r => ({ ...r, processing: false }));
-      const pni = document.getElementById('prop-name-input');
-      if (pni) pni.value = S.propName;
-      const sbn = document.getElementById('sb-name');
-      if (sbn) sbn.textContent = S.propName;
-      saveProject();
+(async () => {
+  try {
+    // Load property index from IDB
+    await _loadPropertyIndex();
+
+    if (!_propIndex.length) {
+      // ── First run or migration ──────────────────
+      // Check for old single-property 'current' key (pre-multi-property era)
+      let migrated = false;
+      try {
+        const db = await _openDB();
+        const tx = db.transaction(_DB_STORE, 'readonly');
+        const req = tx.objectStore(_DB_STORE).get('current');
+        const existing = await new Promise((res, rej) => { req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error); });
+        if (existing && (existing.propName || (existing.rooms && existing.rooms.length))) {
+          // Migrate existing project to property system, keeping all data intact
+          const propId = 'prop_migrate_' + Date.now();
+          existing._propId = propId;
+          const db2 = await _openDB();
+          const tx2 = db2.transaction(_DB_STORE, 'readwrite');
+          tx2.objectStore(_DB_STORE).put(existing, 'prop_' + propId);
+          await new Promise((res, rej) => { tx2.oncomplete = res; tx2.onerror = e => rej(e.target.error); });
+          const thumb = existing.rooms && existing.rooms[0] ? (existing.rooms[0].after || existing.rooms[0].src || null) : null;
+          const cdnThumb = typeof thumb === 'string' && thumb.startsWith('https') ? thumb : null;
+          _propIndex = [{ id: propId, name: existing.propName || 'San Diego', createdAt: existing._savedAt || Date.now(), updatedAt: existing._savedAt || Date.now(), roomCount: (existing.rooms || []).length, hasEmpty: (existing.rooms || []).some(r => r.empty), hasAfter: (existing.rooms || []).some(r => r.after), hasSourcing: false, thumb: cdnThumb }];
+          await _savePropertyIndex();
+          _deserializeState(existing);
+          S._propId = propId;
+          _updatePropertyUI();
+          migrated = true;
+        }
+      } catch(e) { console.warn('Migration check failed:', e); }
+
+      if (!migrated) {
+        // Brand-new device — seed San Diego as the first property
+        const propId = 'prop_sd_' + Date.now();
+        S._propId         = propId;
+        S.propName        = SEED_DATA.propName;
+        S.preset          = SEED_DATA.preset;
+        S.signatureMoment = SEED_DATA.signatureMoment;
+        S.coreEnabled     = SEED_DATA.coreEnabled;
+        S.moodLevel       = SEED_DATA.moodLevel;
+        S.rooms           = SEED_DATA.rooms.map(r => ({ ...r, processing: false }));
+        _updatePropertyUI();
+        await saveProject();
+      }
+    } else {
+      // ── Returning visit — load most recently updated property ──
+      const sorted = [..._propIndex].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const loaded = await loadProjectById(sorted[0].id);
+      if (!loaded) {
+        // Fallback: seed San Diego
+        const propId = 'prop_sd_' + Date.now();
+        S._propId = propId; S.propName = SEED_DATA.propName; S.preset = SEED_DATA.preset;
+        S.signatureMoment = SEED_DATA.signatureMoment; S.coreEnabled = SEED_DATA.coreEnabled;
+        S.moodLevel = SEED_DATA.moodLevel; S.rooms = SEED_DATA.rooms.map(r => ({ ...r, processing: false }));
+        _updatePropertyUI(); await saveProject();
+      }
     }
+
     renderDashboard();
     renderRooms();
-    if (S.rooms.length) {
-      showToast(restored
-        ? `✓ Project restored — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''}`
-        : `✓ San Diego project loaded — ${S.rooms.length} rooms`
-      );
-    }
-    // Always fetch the cloud manifest and fill in any missing images/sourcing.
-    // This makes the app work on mobile, tablet, or any new device automatically.
+    if (S.rooms.length) showToast(`✓ ${S.propName || 'Property'} loaded — ${S.rooms.length} room${S.rooms.length !== 1 ? 's' : ''}`);
     syncFromManifest();
-  });
-} catch(e) {
-  console.error('Revelere Studio init error:', e);
-}
+  } catch(e) {
+    console.error('Revelere Studio init error:', e);
+  }
+})();
 
 // Notify on page visit (rate-limited server-side to once/hour)
 fetch('/api/notify', { method: 'POST' }).catch(() => {});
