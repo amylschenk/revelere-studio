@@ -1040,10 +1040,19 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
         <div id="sourcing-tip" style="display:none;margin-top:9px;padding:10px 13px;background:rgba(122,158,126,0.08);border:1px solid rgba(122,158,126,0.2);border-radius:var(--radius);font-size:12px;color:#4A7A50;"></div>
       </div>
       <div class="budget-card">
+        <div id="room-budget-card" style="display:none;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--ivory);">
+          <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">This room · <span id="rb-room-name">—</span></div>
+          <div class="budget-row"><div class="budget-row-label">Room budget <span style="color:var(--muted-light);">(accepted)</span></div><div class="budget-row-value" id="rb-budget">$0</div></div>
+          <div class="budget-row"><div class="budget-row-label">Spent <span style="color:var(--muted-light);">(ordered)</span></div><div class="budget-row-value" id="rb-spent">$0</div></div>
+          <div class="budget-row"><div class="budget-row-label" style="font-weight:500;color:var(--charcoal);">Remaining</div><div class="budget-row-value" id="rb-remaining" style="font-size:15px;">$0</div></div>
+          <div class="budget-row"><div class="budget-row-label">Saved value</div><div class="budget-row-value" id="rb-saved" style="color:#4A7A50;">$0</div></div>
+        </div>
         <div class="budget-hdr"><div class="budget-hdr-label">Total budget</div><div class="budget-total" id="budget-total">$0</div></div>
         <div class="budget-rows">
           <div class="budget-row"><div class="budget-row-label">Items accepted</div><div class="budget-row-value" id="accepted-label">0</div></div>
           <div class="budget-row"><div class="budget-row-label">Affiliate projected</div><div class="budget-row-value" style="color:#4A7A50;" id="affiliate-label">$0</div></div>
+          <div class="budget-row"><div class="budget-row-label">Spent so far</div><div class="budget-row-value" id="spent-label">$0</div></div>
+          <div class="budget-row"><div class="budget-row-label">Saved value</div><div class="budget-row-value" id="saved-label" style="color:#4A7A50;">$0</div></div>
           <div class="budget-row"><div class="budget-row-label" style="font-weight:500;color:var(--charcoal);">Net cost</div><div class="budget-row-value" id="net-label" style="font-size:15px;">$0</div></div>
         </div>
         <div id="per-room-budget" style="border-top:1px solid var(--border);padding:10px 20px 4px;display:none;">
@@ -3802,6 +3811,7 @@ function updateItemOrder(roomId, itemId, field, value){
   if (!item) return;
   item[field] = value;
   renderSourcing();
+  updateBudget();
 }
 
 // ── Replacement suggestions ───────────────────
@@ -4066,20 +4076,44 @@ function saveCustomItem(){
 }
 
 // ── Budget ────────────────────────────────────
+// Per-room budget math. Reads existing fields only — price, status, ordered, actualCost.
+//   budget    = sum of price over accepted items (green check)
+//   spent     = sum of actualCost over ordered items where actualCost is a number
+//   saved     = sum of (price - actualCost) over those same ordered items (negative = overspent)
+//   remaining = budget - spent
+function computeRoomBudget(roomId){
+  const items = S.sourcing[roomId] || [];
+  let budget = 0, spent = 0, saved = 0;
+  items.forEach(x => {
+    if (x.status === 'accepted') budget += x.price || 0;
+    const cost = (x.actualCost === '' || x.actualCost == null) ? null : Number(x.actualCost);
+    if (x.ordered === true && typeof cost === 'number' && !isNaN(cost)) {
+      spent += cost;
+      saved += (x.price || 0) - cost;
+    }
+  });
+  return { budget, spent, saved, remaining: budget - spent };
+}
+
+const fmtMoney = n => (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString();
+const fmtSaved = n => (n < 0 ? '-$' : '+$') + Math.abs(Math.round(n)).toLocaleString();
+
 function updateBudget(){
-  let totalAcc = 0, totalCost = 0, totalAff = 0;
+  let totalAcc = 0, totalCost = 0, totalAff = 0, totalSpent = 0, totalSaved = 0;
   const roomRows = [];
 
   S.rooms.forEach(room => {
     const items = S.sourcing[room.id] || [];
     const acc = items.filter(x => x.status === 'accepted');
-    const roomCost = acc.reduce((s, x) => s + x.price, 0);
     const roomAff  = acc.reduce((s, x) => s + x.price * x.comm / 100, 0);
+    const rb = computeRoomBudget(room.id);
     totalAcc  += acc.length;
-    totalCost += roomCost;
+    totalCost += rb.budget;
     totalAff  += roomAff;
+    totalSpent += rb.spent;
+    totalSaved += rb.saved;
     if (acc.length > 0) {
-      roomRows.push({ name: room.name, cost: roomCost, count: acc.length });
+      roomRows.push({ name: room.name, cost: rb.budget, count: acc.length, spent: rb.spent, saved: rb.saved });
     }
   });
 
@@ -4090,21 +4124,52 @@ function updateBudget(){
   document.getElementById('net-label').textContent       = '$' + (totalCost - aff).toLocaleString();
   document.getElementById('stat-budget').textContent     = '$' + totalCost.toLocaleString();
 
+  const spentEl = document.getElementById('spent-label');
+  const savedEl = document.getElementById('saved-label');
+  if (spentEl) spentEl.textContent = fmtMoney(totalSpent);
+  if (savedEl) { savedEl.textContent = fmtSaved(totalSaved); savedEl.style.color = totalSaved >= 0 ? '#4A7A50' : '#C4847A'; }
+
+  // "This room" card — follows the active sourcing room tab
+  const roomCard = document.getElementById('room-budget-card');
+  if (roomCard) {
+    const room = getCurrentRoom();
+    if (room) {
+      const rb = computeRoomBudget(room.id);
+      roomCard.style.display = 'block';
+      document.getElementById('rb-room-name').textContent = room.name;
+      document.getElementById('rb-budget').textContent    = fmtMoney(rb.budget);
+      document.getElementById('rb-spent').textContent     = fmtMoney(rb.spent);
+      const remEl = document.getElementById('rb-remaining');
+      remEl.textContent = fmtMoney(rb.remaining);
+      remEl.style.color = rb.remaining < 0 ? '#C4847A' : 'var(--charcoal)';
+      const savEl = document.getElementById('rb-saved');
+      savEl.textContent = fmtSaved(rb.saved);
+      savEl.style.color = rb.saved >= 0 ? '#4A7A50' : '#C4847A';
+    } else {
+      roomCard.style.display = 'none';
+    }
+  }
+
   // Per-room breakdown
   const perRoomWrap = document.getElementById('per-room-budget');
   const perRoomRows = document.getElementById('per-room-budget-rows');
   if (perRoomWrap && perRoomRows) {
     if (roomRows.length > 0) {
       perRoomWrap.style.display = 'block';
-      perRoomRows.innerHTML = roomRows.map(r =>
-        `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;border-bottom:1px solid var(--ivory-dark);">
-          <div style="color:var(--charcoal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;" title="${r.name}">${r.name}</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-            <span style="font-size:10px;color:var(--muted);">${r.count} item${r.count!==1?'s':''}</span>
-            <span style="font-weight:500;color:var(--charcoal);">$${r.cost.toLocaleString()}</span>
-          </div>
-        </div>`
-      ).join('');
+      perRoomRows.innerHTML = roomRows.map(r => {
+        const subline = (r.spent > 0 || r.saved !== 0)
+          ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">spent ${fmtMoney(r.spent)} · saved <span style="color:${r.saved>=0?'#4A7A50':'#C4847A'};">${fmtSaved(r.saved)}</span></div>`
+          : '';
+        return `<div style="padding:4px 0;font-size:12px;border-bottom:1px solid var(--ivory-dark);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="color:var(--charcoal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;" title="${r.name}">${r.name}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              <span style="font-size:10px;color:var(--muted);">${r.count} item${r.count!==1?'s':''}</span>
+              <span style="font-weight:500;color:var(--charcoal);">$${r.cost.toLocaleString()}</span>
+            </div>
+          </div>${subline}
+        </div>`;
+      }).join('');
     } else {
       perRoomWrap.style.display = 'none';
     }
