@@ -1001,6 +1001,7 @@ body { background: var(--ivory); color: var(--charcoal); font-family: var(--font
               <button class="btn btn-ghost btn-sm" onclick="importSourcingCSV()" title="Import CSV">↑ Import CSV</button>
               <button class="btn btn-ghost btn-sm" onclick="exportSourcingCSV('room')" title="Export this room">↓ Room CSV</button>
               <button class="btn btn-ghost btn-sm" onclick="exportSourcingCSV('all')" title="Export all rooms">↓ All CSV</button>
+              <button class="btn btn-ghost btn-sm" onclick="openCatalog()" title="Printable Revelere product catalog — vision board per room">⊞ Catalog</button>
               <button id="budget-tracker-btn" onclick="pushBudgetTracker()" title="Push all accepted &amp; pending items to the shared Google Sheet"
                 style="font-size:11px;padding:4px 13px;background:#1B1B1B;color:#F5F2EE;border:1px solid #1B1B1B;border-radius:var(--radius);cursor:pointer;letter-spacing:0.04em;font-family:var(--font-body);transition:opacity 0.15s;">
                 ⊙ Design Budget Tracker
@@ -5057,6 +5058,141 @@ function exportBookPDF() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 8000);
   showToast('✓ Flipbook opened — click Save as PDF, set Margins: None, check Background graphics');
+}
+
+// ── Product Catalog — printable Revelere vision board, one page per room ──
+// Opens a self-contained letter-size page in a new tab. A toggle lets Amy
+// switch between every accepted item and only the ones she's ordered; the
+// toggle is hidden when printing. Reads existing item fields only.
+function openCatalog() {
+  if (!S.rooms.length) { showToast('No rooms yet — upload and source items first', true); return; }
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const prop = S.propName || 'Revelere Project';
+
+  const roomPages = [];
+  S.rooms.forEach(room => {
+    // A catalog item is anything relevant: accepted (the plan) or ordered (purchased).
+    const items = (S.sourcing[room.id] || []).filter(x => x.status === 'accepted' || x.ordered === true);
+    if (!items.length) return;
+    const hasOrdered = items.some(x => x.ordered === true);
+    const rb = computeRoomBudget(room.id);
+
+    const cards = items.map(item => {
+      const ordered = item.ordered === true;
+      const cost = (item.actualCost === '' || item.actualCost == null) ? null : Number(item.actualCost);
+      const hasCost = ordered && typeof cost === 'number' && !isNaN(cost);
+      const imgSrc = item.image || getFallbackImage(item);
+      const ph = getItemPlaceholderUri(item);
+      const priceLine = hasCost
+        ? `<span class="cat-est">Est $${(item.price||0).toLocaleString()}</span><span class="cat-paid">Paid $${Math.round(cost).toLocaleString()}</span>`
+        : `<span class="cat-price">$${(item.price||0).toLocaleString()}</span>`;
+      return `<div class="cat-card ${ordered ? 'is-ordered' : ''}">
+        <div class="cat-img-wrap">
+          ${ordered ? '<span class="cat-badge">Ordered</span>' : ''}
+          <img src="${esc(imgSrc)}" alt="${esc(item.name)}" onerror="this.onerror=null;this.src='${ph}';" onload="if(this.naturalWidth===0){this.onerror=null;this.src='${ph}';}">
+        </div>
+        <div class="cat-name">${esc(item.name)}</div>
+        <div class="cat-vendor">${esc(item.vendor || '')}${item.category ? (' · ' + esc(item.category)) : ''}</div>
+        <div class="cat-priceline">${priceLine}</div>
+      </div>`;
+    }).join('');
+
+    const savedColor = rb.saved >= 0 ? '#4A7A50' : '#C4847A';
+    const remColor   = rb.remaining < 0 ? '#C4847A' : '#1B1B1B';
+
+    roomPages.push(`<section class="room-page ${hasOrdered ? 'has-ordered' : ''}">
+      <header class="cat-head">
+        <div class="cat-wordmark">Revelere</div>
+        <div class="cat-room">${esc(room.name)}</div>
+        <div class="cat-sub">${esc(prop)} · Product Catalog</div>
+        <div class="cat-budget">
+          <div class="cat-stat"><span class="cat-stat-l">Room budget</span><span class="cat-stat-v">${fmtMoney(rb.budget)}</span></div>
+          <div class="cat-stat"><span class="cat-stat-l">Spent</span><span class="cat-stat-v">${fmtMoney(rb.spent)}</span></div>
+          <div class="cat-stat"><span class="cat-stat-l">Remaining</span><span class="cat-stat-v" style="color:${remColor};">${fmtMoney(rb.remaining)}</span></div>
+          <div class="cat-stat"><span class="cat-stat-l">Saved value</span><span class="cat-stat-v" style="color:${savedColor};">${fmtSaved(rb.saved)}</span></div>
+        </div>
+      </header>
+      <div class="cat-grid">${cards}</div>
+      <footer class="cat-foot">Cinematic. Intentional. Unforgettable.</footer>
+    </section>`);
+  });
+
+  if (!roomPages.length) { showToast('No accepted or ordered items to catalog yet', true); return; }
+
+  const html = `<!DOCTYPE html><html><head>
+  <meta charset="UTF-8">
+  <title>Revelere — ${esc(prop)} Catalog</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: #2a2520; padding: 28px 0 90px; color: #1B1B1B; }
+    img { max-width: 100%; display: block; }
+    .room-page { width: 8.5in; min-height: 11in; background: #F7F4EF; margin: 0 auto 26px; padding: 0.6in 0.65in; box-shadow: 0 18px 50px rgba(0,0,0,0.4); display: flex; flex-direction: column; }
+    .cat-head { border-bottom: 1px solid #d8cfc2; padding-bottom: 18px; margin-bottom: 24px; }
+    .cat-wordmark { font-family: 'Cormorant Garamond', Georgia, serif; letter-spacing: 0.5em; text-transform: uppercase; font-size: 12px; color: #A67C52; font-weight: 600; }
+    .cat-room { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 42px; font-weight: 300; color: #1B1B1B; line-height: 1.04; margin-top: 10px; }
+    .cat-sub { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #8A7E70; margin-top: 7px; }
+    .cat-budget { display: flex; gap: 30px; margin-top: 20px; flex-wrap: wrap; }
+    .cat-stat { display: flex; flex-direction: column; gap: 2px; }
+    .cat-stat-l { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #8A7E70; }
+    .cat-stat-v { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 24px; font-weight: 400; color: #1B1B1B; }
+    .cat-grid { display: flex; flex-wrap: wrap; gap: 20px 18px; align-content: flex-start; flex: 1; }
+    .cat-card { width: 1.65in; break-inside: avoid; page-break-inside: avoid; }
+    .cat-img-wrap { position: relative; width: 100%; height: 1.5in; overflow: hidden; border: 1px solid #e0d7ca; background: #EDE9E3; border-radius: 2px; }
+    .cat-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .cat-badge { position: absolute; top: 7px; left: 7px; background: #1B1B1B; color: #F5F2EE; font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 7px; border-radius: 2px; z-index: 2; }
+    .cat-name { font-size: 11.5px; font-weight: 500; color: #1B1B1B; margin-top: 9px; line-height: 1.25; }
+    .cat-vendor { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: #8A7E70; margin-top: 3px; }
+    .cat-priceline { margin-top: 6px; display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap; }
+    .cat-price { font-size: 13px; font-weight: 500; color: #1B1B1B; }
+    .cat-est { font-size: 10px; color: #8A7E70; text-decoration: line-through; }
+    .cat-paid { font-size: 13px; font-weight: 600; color: #A67C52; }
+    .cat-foot { margin-top: 24px; padding-top: 14px; border-top: 1px solid #d8cfc2; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 12px; letter-spacing: 0.16em; color: #8A7E70; }
+    body.ordered-only .cat-card:not(.is-ordered) { display: none; }
+    body.ordered-only .room-page:not(.has-ordered) { display: none; }
+    #cat-bar { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; background: rgba(28,24,20,0.94); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.12); border-radius: 40px; padding: 8px 12px; z-index: 100; }
+    .cat-toggle { display: flex; background: rgba(255,255,255,0.08); border-radius: 20px; padding: 3px; }
+    .cat-tbtn { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 11px; letter-spacing: 0.04em; padding: 6px 14px; border-radius: 18px; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+    .cat-tbtn.active { background: #A67C52; color: #fff; }
+    .cat-print { background: #A67C52; border: none; color: #fff; padding: 8px 18px; border-radius: 20px; font-size: 12px; cursor: pointer; letter-spacing: 0.04em; font-family: 'DM Sans', sans-serif; }
+    .cat-print:hover { background: #8a6340; }
+    @page { size: letter; margin: 0; }
+    @media print {
+      html { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #fff !important; padding: 0 !important; }
+      #cat-bar { display: none !important; }
+      .room-page { box-shadow: none !important; margin: 0 !important; width: 100% !important; min-height: 100vh !important; page-break-after: always; break-after: page; }
+      .room-page:last-of-type { page-break-after: avoid; break-after: avoid; }
+      body.ordered-only .room-page:not(.has-ordered) { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  ${roomPages.join('\n')}
+  <div id="cat-bar">
+    <div class="cat-toggle">
+      <button class="cat-tbtn active" id="cat-all" onclick="setMode('all')">Accepted + Ordered</button>
+      <button class="cat-tbtn" id="cat-ord" onclick="setMode('ordered')">Ordered only</button>
+    </div>
+    <button class="cat-print" onclick="window.print()">&#10515; Save as PDF</button>
+  </div>
+  <script>
+    function setMode(m) {
+      var ordered = m === 'ordered';
+      document.body.classList.toggle('ordered-only', ordered);
+      document.getElementById('cat-all').classList.toggle('active', !ordered);
+      document.getElementById('cat-ord').classList.toggle('active', ordered);
+    }
+  <\/script>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 8000);
+  showToast('✓ Catalog opened — toggle Ordered only if you like, then Save as PDF (Letter, Background graphics on)');
 }
 
 // ── Share link — uploads a self-contained flipbook to Vercel Blob ──
